@@ -122,7 +122,7 @@ def match_metric(label: str) -> str | None:
 
 def parse_value(cell: str) -> ParsedValue | None:
     """Parse a table cell like "1.04 ± 0.12", "54.5 (8.2)", "95–115" or "112.3"."""
-    text = cell.strip()
+    text = cell.strip().replace("\u2212", "-")  # Unicode minus -> ASCII
     label = None
     lead = re.match(r"^([A-Za-z][A-Za-z ]{0,15}?)\s+(?=-?\d)", text)
     if lead:
@@ -163,9 +163,19 @@ def _is_data_row(row: list[str | None]) -> bool:
     return any(c and parse_value(c) for c in row[1:])
 
 
-def _column_headers(cells: list[list[str | None]]) -> tuple[list[str], int]:
-    """Join the header rows (rows before the first data row) per column."""
-    first_data = next((i for i, row in enumerate(cells) if _is_data_row(row)), len(cells))
+def _column_headers(
+    cells: list[list[str | None]], n_header_rows: int | None = None
+) -> tuple[list[str], int]:
+    """Join the header rows per column.
+
+    Uses `n_header_rows` when known (XML <thead>); otherwise header rows are those
+    before the first row containing a value. The heuristic can mistake value-like
+    headers (age groups "20-29") for data, which is why XML's count is preferred.
+    """
+    if n_header_rows is not None:
+        first_data = n_header_rows
+    else:
+        first_data = next((i for i, row in enumerate(cells) if _is_data_row(row)), len(cells))
     n_cols = max((len(r) for r in cells), default=0)
     headers = []
     for j in range(n_cols):
@@ -178,13 +188,37 @@ def _candidate_id(*parts: object) -> str:
     return hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:12]
 
 
+def _section_title(row: list[str | None]) -> str | None:
+    """A full-width group heading row (e.g. "STRIDE TIME" spanning all columns)."""
+    filled = {c for c in row if c}
+    if len(filled) == 1:
+        (text,) = filled
+        if parse_value(text) is None:
+            return text
+    return None
+
+
 def extract_candidates(paper_id: str, table: RawTable) -> list[NormCandidate]:
     """Extract candidate norm values from one table (both orientations)."""
-    headers, first_data = _column_headers(table.cells)
+    headers, first_data = _column_headers(table.cells, table.n_header_rows)
     out: list[NormCandidate] = []
-    for row in table.cells[first_data:]:
+    section: str | None = None
+    for i, row in enumerate(table.cells[first_data:], start=first_data):
+        title = _section_title(row)
+        if title is not None:
+            section = title
+            continue
         row_label = (row[0] or "").strip() if row else ""
+        if section and row_label and not match_metric(row_label):
+            # "Mean value (ms)" under a "STRIDE TIME" section -> "STRIDE TIME Mean value (ms)"
+            row_label = f"{section} {row_label}"
         row_metric = match_metric(row_label) if row_label else None
+        # Sub-group labels between the row label and the first value, e.g. "M" / "W"
+        # under a metric label that spans several rows.
+        first_value = next(
+            (j for j, c in enumerate(row[1:], start=1) if c and parse_value(c)), len(row)
+        )
+        row_context = [c for c in row[1:first_value] if c and c != row[0]]
         for j, cell in enumerate(row[1:], start=1):
             header = headers[j] if j < len(headers) else ""
             if not cell or _STAT_COLUMN.search(header) or _MULTI_VALUE.search(cell):
@@ -200,13 +234,15 @@ def extract_candidates(paper_id: str, table: RawTable) -> list[NormCandidate]:
             group = header if row_metric else row_label
             if re.search(r"\bcv\b|coefficient of variation", header, re.IGNORECASE):
                 metric = "stride_time_cv" if metric == "stride_time" else f"{metric}_cv"
-            population = " | ".join(p for p in (group, value.cell_label) if p)
+            population = " | ".join(p for p in (group, *row_context, value.cell_label) if p)
             metric = refine_metric(metric, units)
             if metric not in RELEVANT_METRICS:
                 continue
             out.append(
                 NormCandidate(
-                    candidate_id=_candidate_id(paper_id, table.page, table.table_no, row_label, j),
+                    candidate_id=_candidate_id(
+                        paper_id, table.page, table.table_no, i, row_label, j
+                    ),
                     paper_id=paper_id,
                     page=table.page,
                     table_no=table.table_no,

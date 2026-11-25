@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Chunk, Paper, PaperTable
 from app.rag.chunking import chunk_segments
 from app.rag.embeddings import Embedder, passage_text
+from app.rag.jats import jats_tables_with_pages, merge_tables
 from app.rag.manifest import ManifestEntry
 from app.rag.parsing import RawTable, parse_pdf
 from app.rag.tables import NormCandidate, extract_candidates
@@ -58,7 +59,9 @@ def _upsert_paper(session: Session, entry: ManifestEntry) -> Paper:
 
 def _stored_tables(session: Session, paper_id: str) -> list[RawTable]:
     rows = session.scalars(select(PaperTable).where(PaperTable.paper_id == paper_id))
-    return [RawTable(t.page, t.table_no, t.caption, t.cells) for t in rows]
+    return [
+        RawTable(t.page, t.table_no, t.caption, t.cells, t.source, t.n_header_rows) for t in rows
+    ]
 
 
 def ingest_paper(
@@ -72,7 +75,11 @@ def ingest_paper(
         embedder: embedding model (also provides the token counter for chunking).
         force: re-ingest even if the PDF is unchanged.
     """
+    # Fingerprint of the source files (stored in papers.pdf_sha256): the PDF hash,
+    # combined with the XML hash when present, so a changed XML also re-ingests.
     pdf_hash = sha256_of(entry.pdf_path)
+    if entry.xml_path.exists():
+        pdf_hash = hashlib.sha256((pdf_hash + sha256_of(entry.xml_path)).encode()).hexdigest()
     paper = _upsert_paper(session, entry)
     n_existing = session.scalar(
         select(func.count()).select_from(Chunk).where(Chunk.paper_id == entry.paper_id)
@@ -83,6 +90,10 @@ def ingest_paper(
         return IngestResult(entry.paper_id, "unchanged", n_existing, len(tables), candidates)
 
     parsed = parse_pdf(entry.pdf_path)
+    xml_tables = (
+        jats_tables_with_pages(entry.xml_path, entry.pdf_path) if entry.xml_path.exists() else []
+    )
+    tables = merge_tables(xml_tables, parsed.tables)
     drafts = chunk_segments(parsed.segments, embedder.count_tokens)
     vectors = embedder.embed_passages(
         [passage_text(entry.title, d.section, d.text) for d in drafts]
@@ -110,12 +121,14 @@ def ingest_paper(
             table_no=t.table_no,
             caption=t.caption,
             cells=t.cells,
+            source=t.source,
+            n_header_rows=t.n_header_rows,
         )
-        for t in parsed.tables
+        for t in tables
     )
     paper.pdf_sha256 = pdf_hash
     paper.n_pages = parsed.n_pages
     paper.ingested_at = datetime.now(UTC)
 
-    candidates = [c for t in parsed.tables for c in extract_candidates(entry.paper_id, t)]
-    return IngestResult(entry.paper_id, "ingested", len(drafts), len(parsed.tables), candidates)
+    candidates = [c for t in tables for c in extract_candidates(entry.paper_id, t)]
+    return IngestResult(entry.paper_id, "ingested", len(drafts), len(tables), candidates)

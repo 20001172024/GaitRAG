@@ -178,6 +178,8 @@ class RawTable:
     table_no: str | None  # from the caption, e.g. "2"
     caption: str | None
     cells: list[list[str | None]]
+    source: str = "pdf"  # "pdf" (find_tables) or "xml" (JATS, see app.rag.jats)
+    n_header_rows: int | None = None  # known for XML (<thead>); None = detect heuristically
 
 
 @dataclass(frozen=True)

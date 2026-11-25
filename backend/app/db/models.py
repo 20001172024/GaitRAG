@@ -97,6 +97,8 @@ class PaperTable(Base):
     table_no: Mapped[str | None] = mapped_column(String(16))  # from caption, e.g. "2"
     caption: Mapped[str | None] = mapped_column(Text)
     cells: Mapped[list[list[str | None]]] = mapped_column(JSONB)
+    source: Mapped[str] = mapped_column(String(8), server_default="pdf")  # "pdf" | "xml"
+    n_header_rows: Mapped[int | None] = mapped_column(Integer)
 
 
 class Norm(Base):

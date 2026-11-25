@@ -108,3 +108,50 @@ def test_candidate_ids_are_stable() -> None:
     assert extract_candidates("P001", table)[0].candidate_id == (
         extract_candidates("P001", table)[0].candidate_id
     )
+
+
+def test_known_header_rows_keep_value_like_headers() -> None:
+    # "20–29" looks like a range value; with n_header_rows it stays a header.
+    table = RawTable(
+        6,
+        "4",
+        "Table 4",
+        [
+            ["parameter", "sex", "20–29", "30–39"],
+            ["cadence (steps/min)", "M", "109.88 (6.46)", "110.07 (8.93)"],
+            ["cadence (steps/min)", "W", "114.91 (9.21)", "116.40 (8.18)"],
+        ],
+        source="xml",
+        n_header_rows=1,
+    )
+    cands = extract_candidates("P003", table)
+    assert [c.population for c in cands] == ["20–29 | M", "30–39 | M", "20–29 | W", "30–39 | W"]
+    assert len({c.candidate_id for c in cands}) == 4  # same row label, distinct rows
+
+
+def test_section_rows_label_the_rows_below() -> None:
+    table = RawTable(
+        11,
+        "3",
+        "Table 3",
+        [
+            ["", "Total", "Female"],
+            ["STRIDE TIME", "STRIDE TIME", "STRIDE TIME"],
+            ["Mean value (ms)", "1123.7 ± 122.4", "1095.5 ± 109.8"],
+            ["CoV (%)", "2.2 ± 1.1", "2.2 ± 1.1"],
+        ],
+        source="xml",
+        n_header_rows=1,
+    )
+    cands = extract_candidates("P001", table)
+    assert [(c.metric, c.units, c.value_text) for c in cands] == [
+        ("stride_time", "ms", "1123.7 ± 122.4"),
+        ("stride_time", "ms", "1095.5 ± 109.8"),
+        ("stride_time_cv", "%", "2.2 ± 1.1"),
+        ("stride_time_cv", "%", "2.2 ± 1.1"),
+    ]
+    assert cands[0].row_label == "STRIDE TIME Mean value (ms)"
+
+
+def test_unicode_minus_is_parsed() -> None:
+    assert parse_value("−0.42 ± 0.10").mean == -0.42
