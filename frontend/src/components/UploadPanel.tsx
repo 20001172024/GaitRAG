@@ -14,6 +14,10 @@ const SAMPLE_LABEL: Record<string, string> = {
   synthetic_fast: "Fast walk",
 };
 
+const ORDER = ["synthetic_slow", "synthetic_normal", "synthetic_fast"];
+const rank = (name: string) => (ORDER.includes(name) ? ORDER.indexOf(name) : ORDER.length);
+const bySpeed = (a: Sample, b: Sample) => rank(a.name) - rank(b.name);
+
 export function UploadPanel({ samples, busy, onFile, onSample }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -24,7 +28,10 @@ export function UploadPanel({ samples, busy, onFile, onSample }: Props) {
   };
 
   return (
-    <section aria-labelledby="upload-heading" className="rounded-xl border bg-white p-5 shadow-sm">
+    <section
+      aria-labelledby="upload-heading"
+      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
       <h2 id="upload-heading" className="text-lg font-semibold">
         1. Load a walking recording
       </h2>
@@ -75,7 +82,7 @@ export function UploadPanel({ samples, busy, onFile, onSample }: Props) {
             </span>
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {samples.map((s) => (
+            {[...samples].sort(bySpeed).map((s) => (
               <button
                 key={s.name}
                 type="button"

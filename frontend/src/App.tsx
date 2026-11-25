@@ -143,7 +143,7 @@ export default function App() {
 
             <section
               aria-labelledby="answer-heading"
-              className="rounded-xl border bg-white p-5 shadow-sm"
+              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
             >
               <h2 id="answer-heading" className="text-lg font-semibold">
                 4. What the literature says

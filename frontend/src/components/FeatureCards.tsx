@@ -31,7 +31,7 @@ export function FeatureCards({ analysis, onOpenNorm }: Props) {
         {FEATURES.map((f) => {
           const norms = comparisonsFor(f.key, analysis.norms_comparison);
           return (
-            <li key={f.key} className="rounded-xl border bg-white p-4 shadow-sm">
+            <li key={f.key} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-sm font-medium text-slate-700" title={f.help}>
                 {f.label}
               </p>

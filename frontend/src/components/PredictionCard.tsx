@@ -7,7 +7,7 @@ export function PredictionCard({ analysis }: { analysis: AnalyzeResponse }) {
   return (
     <section
       aria-labelledby="prediction-heading"
-      className="rounded-xl border bg-white p-5 shadow-sm"
+      className="min-w-0 self-start rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="prediction-heading" className="text-lg font-semibold">

@@ -1,8 +1,16 @@
-import { CartesianGrid, Legend, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { downsampleIndices, type Recording } from "../lib/csv";
 
 const MAX_POINTS = 1000;
-const WIDTH = 640;
 const HEIGHT = 200;
 
 function sum(rec: Recording, cols: string[], i: number): number {
@@ -27,7 +35,10 @@ export function SignalPlots({ recording }: { recording: Recording }) {
   }));
 
   return (
-    <section aria-labelledby="signals-heading" className="rounded-xl border bg-white p-5 shadow-sm">
+    <section
+      aria-labelledby="signals-heading"
+      className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
       <h2 id="signals-heading" className="text-lg font-semibold">
         Sensor signals
       </h2>
@@ -35,39 +46,45 @@ export function SignalPlots({ recording }: { recording: Recording }) {
         {recording.rows} samples ({((t[t.length - 1] - t0) / 1000).toFixed(1)} s), drawn at up to{" "}
         {MAX_POINTS} points.
       </p>
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3">
         <h3 className="text-sm font-medium text-slate-700">
           Foot load (sum of heel, meta, toe FSRs)
         </h3>
-        <LineChart width={WIDTH} height={HEIGHT} data={rows} margin={{ left: 8, right: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="t" unit=" s" type="number" domain={["dataMin", "dataMax"]} />
-          <YAxis width={48} />
-          <Tooltip />
-          <Legend />
-          <Line
-            dataKey="left"
-            name="Left foot"
-            stroke="#0f766e"
-            dot={false}
-            isAnimationActive={false}
-          />
-          <Line
-            dataKey="right"
-            name="Right foot"
-            stroke="#b45309"
-            dot={false}
-            isAnimationActive={false}
-          />
-        </LineChart>
-        <h3 className="mt-4 text-sm font-medium text-slate-700">IMU 1 acceleration magnitude</h3>
-        <LineChart width={WIDTH} height={HEIGHT} data={rows} margin={{ left: 8, right: 8 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="t" unit=" s" type="number" domain={["dataMin", "dataMax"]} />
-          <YAxis width={48} unit=" m/s²" />
-          <Tooltip />
-          <Line dataKey="acc" name="|a|" stroke="#334155" dot={false} isAnimationActive={false} />
-        </LineChart>
+        <ResponsiveContainer width="100%" height={HEIGHT}>
+          <LineChart data={rows} margin={{ left: 0, right: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="t" unit=" s" type="number" domain={["dataMin", "dataMax"]} />
+            <YAxis width={48} />
+            <Tooltip />
+            <Legend />
+            <Line
+              dataKey="left"
+              name="Left foot"
+              stroke="#0f766e"
+              dot={false}
+              isAnimationActive={false}
+            />
+            <Line
+              dataKey="right"
+              name="Right foot"
+              stroke="#b45309"
+              dot={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+        <h3 className="mt-4 text-sm font-medium text-slate-700">
+          IMU 1 acceleration magnitude (m/s²)
+        </h3>
+        <ResponsiveContainer width="100%" height={HEIGHT}>
+          <LineChart data={rows} margin={{ left: 0, right: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="t" unit=" s" type="number" domain={["dataMin", "dataMax"]} />
+            <YAxis width={40} />
+            <Tooltip />
+            <Line dataKey="acc" name="|a|" stroke="#334155" dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </section>
   );
