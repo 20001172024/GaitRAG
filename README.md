@@ -1,27 +1,79 @@
 # GaitRAG
 
-Evidence-grounded gait analysis assistant. Upload a walking recording (insole IMU + pressure CSV), get a walking-speed classification, interpretable gait features, and an explanation compared against published norms, with every claim cited to a paper, page and table.
+Evidence-grounded gait analysis assistant. Upload a walking recording (insole IMU + pressure CSV), get a walking-speed classification, interpretable gait features, and an explanation compared against published norms, with every claim cited to a paper, page and table, or an explicit "insufficient evidence".
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** M6 (evaluation). The scripts are ready; results need the owner's question set, an LLM API key and approved norms. The OpenAI call is unit-tested but not yet verified against the live API. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
+**Status:** all milestones are implemented (see [`CLAUDE.md`](CLAUDE.md)). Still pending before the project is "done": evaluation results (they need the owner's question set and an LLM API key), human approval of the extracted norm values, a live deployment, and a demo GIF.
 
-## Quick start (Docker)
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["React dashboard<br/>upload · plots · feature cards · cited answers"] -->|CSV| AN["/analyze"]
+    UI -->|question + features| ASK["/ask"]
+    AN --> FE["Gait events + features<br/>(pressure, IMU, FFT)"] --> RF["Random Forest<br/>slow / normal / fast"]
+    AN --> NC
+    ASK --> QB["Query builder<br/>(question + one query per feature)"]
+    QB --> V["Vector search<br/>bge-small + pgvector HNSW"]
+    QB --> B["BM25<br/>rank_bm25"]
+    V --> RRF["Reciprocal Rank Fusion"]
+    B --> RRF
+    RRF --> RR["Cross-encoder rerank"]
+    RR --> GEN["LLM (OpenAI / HF)<br/>labelled sources, temp 0"]
+    NC["Norm comparison in code<br/>(approved norms only)"] --> GEN
+    GEN --> CC{"Citation check"}
+    CC -->|valid| OUT["Answer + citations + disclaimer"]
+    CC -->|invalid after retry| IE["Insufficient evidence"]
+    subgraph DB["Postgres + pgvector"]
+      CH["chunks: text + tables"]
+      NT["norms (human-approved)"]
+    end
+    V -.-> CH
+    B -.-> CH
+    NC -.-> NT
+    ING["Ingestion: PMC OA PDFs + JATS XML<br/>parse · chunk · embed · tables → norm candidates"] --> DB
+```
+
+## Run it
+
+**Production-like (one container: API + UI):**
+
+```bash
+echo "POSTGRES_PASSWORD=change-me" > .env           # plus OPENAI_API_KEY=... for explanations
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml run --rm app ingest   # once: download + index the papers
+```
+
+Open http://localhost:8000 and click **Normal walk**. API docs are at `/docs`.
+
+**Development (hot reload):**
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up --build       # API :8000, UI :5173, Postgres :5432
 ```
 
-- Backend: http://localhost:8000/health (API docs at `/docs`)
-- Frontend: http://localhost:5173
-- Postgres + pgvector: `localhost:5432`
+| Endpoint | Purpose |
+|---|---|
+| `POST /analyze` | CSV → speed prediction, gait features, comparison with approved norms |
+| `POST /ask` | question (+ features) → cited answer or insufficient evidence |
+| `POST /search` | retrieval only, with ablation switches |
+| `GET /papers` | the corpus, with attribution and licence |
+| `GET /samples` | synthetic demo recordings |
+| `GET /health` | liveness and database status |
 
-Try the analyzer with a sample recording:
+## Results
 
-```bash
-curl -F file=@data/samples/synthetic_normal.csv http://localhost:8000/analyze
-```
+**Pending.** The evaluation scripts are built (see [Evaluation](#evaluation-m6)), but no results are reported until they come from real runs on the owner's question set. The only metrics so far are the speed classifier's, on **synthetic** data ([report](backend/models/training_report.md)), which show that the pipeline runs and nothing about real-world accuracy.
+
+| Ablation | Recall@5 | Recall@10 | MRR |
+|---|---|---|---|
+| 1. Vector only | – | – | – |
+| 2. BM25 only | – | – | – |
+| 3. Hybrid (RRF) | – | – | – |
+| 4. Hybrid + reranker | – | – | – |
+| 5. Hybrid + reranker + tables / norms lookup | – | – | – |
 
 ## Local development
 
@@ -72,12 +124,6 @@ Evaluation uses `GroupKFold` by subject, so no person appears in both training a
 
 > **These results are on SYNTHETIC data** and only show that the pipeline runs. They say nothing about real-world accuracy.
 
-### Known limitations
-
-- **Normalization at inference.** In the research setting, signals are z-scored per subject using all of that subject's trials. A demo upload is the only data we have from that person, so it is normalized against itself, and the deployed model is trained the same way to match. On synthetic data this costs accuracy compared with subject-wise normalization (see the report).
-- **Synthetic data.** The generator's parameters are invented, not published norms. The CSV schema and IMU placement still need to be confirmed against the real dataset.
-- **Thresholds.** Gait-event thresholds were tuned on synthetic signals and need checking on real recordings.
-
 ## Paper corpus (M2)
 
 ```bash
@@ -95,11 +141,6 @@ python scripts/ingest_papers.py     # parse, chunk, embed -> Postgres; refresh n
 Set `decision` to `approve` or `reject` in the review CSV (you may correct metric, population, units or the parsed numbers), then re-run `ingest_papers.py`. Unchanged PDFs are skipped. Your edits are kept for every row that has a decision or a note; untouched rows are refreshed from extraction.
 
 The `flags` column gives automatic hints: no or unusual units, a value outside rough plausibility bounds, SD larger than the mean, a missing population, or a reliability, regression or validation table. **The bounds are sanity limits chosen for this project, not published norms.** A flag is not a decision; it only shows where to look first.
-
-### Known limitations (M2)
-
-- Papers without JATS XML rely on PDF table detection, which handles rotated tables and dot-leader layouts poorly.
-- Section detection relies on standard section names. Unusual layouts fall back to the previous section label.
 
 ## Retrieval (M3)
 
@@ -167,6 +208,18 @@ python eval/run_latency_eval.py          # p50/p95 of /analyze, /search, /ask (r
 - **Citation accuracy:** each run writes a citation-check sheet. Mark `supported` with yes or no, then score it with `--score-citations`.
 - **Gate calibration:** the retrieval run suggests `MIN_RERANK_SCORE` from the reranker scores of answerable vs unanswerable questions.
 - **Not yet included:** RAGAS metrics, which need an LLM judge.
+
+## Limitations
+
+- **Not a diagnostic tool.** Comparisons describe how a value relates to published groups; they say nothing about health.
+- **Synthetic data only.** The speed classifier was trained and evaluated on synthetic recordings whose parameters were invented, not taken from published norms. The CSV schema and IMU placement still need confirming against the real dataset, and the gait-event thresholds were tuned on synthetic signals.
+- **Normalization at inference.** Research-style subject-wise z-scoring needs several trials per person. A single upload is normalized against itself (the deployed model is trained the same way), which cost accuracy on synthetic data.
+- **Norms need human review.** Only values a reviewer approved are used. Extraction is rule-based and flags suspicious rows, but tables with unusual layouts, or without JATS XML, extract poorly.
+- **Small corpus.** 24 open-access papers. Questions outside them should, and are designed to, end in "insufficient evidence".
+- **Citation checks are structural.** Every citation must point to a provided source, but whether that source *supports* the sentence is checked by a person on a sample (citation accuracy), not automatically.
+- **CPU inference.** Reranking is the slowest step (~0.8 s per query on a 4-core CPU); the larger `bge-reranker-base` is about 7x slower.
+- **Section detection** relies on standard section names, so unusual layouts fall back to the previous section label.
+- **LLM generation is not yet verified against a live API**, and RAGAS metrics are not yet integrated.
 
 ## Data policy
 
