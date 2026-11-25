@@ -26,13 +26,29 @@ from app.ml.schema import ALL_COLUMNS, FSR_SITES, IMU_AXES, SAMPLING_RATE_HZ
 SPEEDS = ("slow", "normal", "fast")
 
 # Made-up generation parameters (NOT published norms).
+#
+# The speed label only sets the *target cadence*. Every other speed-dependent
+# parameter is a continuous function of the trial's actual cadence plus noise.
+# (An earlier version gave each class a fixed IMU amplitude; the classifier
+# then separated classes perfectly via signal-to-noise artefacts such as
+# kurtosis, a shortcut that real data would not offer.)
 _CADENCE_MEAN = {"slow": 92.0, "normal": 108.0, "fast": 124.0}  # steps/min
 _CADENCE_TRIAL_SD = 4.0
-_STANCE_FRAC = {"slow": 0.66, "normal": 0.62, "fast": 0.58}
-_STRIDE_CV = {"slow": 0.035, "normal": 0.025, "fast": 0.020}
-_ACC_AMP = {"slow": 2.0, "normal": 3.5, "fast": 5.0}  # m/s^2
-_GYRO_AMP = {"slow": 150.0, "normal": 250.0, "fast": 350.0}  # deg/s
-_HEEL_IMPACT = {"slow": 0.9, "normal": 1.0, "fast": 1.2}
+_CADENCE_REF, _CADENCE_SCALE = 108.0, 16.0  # intensity z = (cadence - ref) / scale
+
+
+def _intensity_params(cadence: float, subject_vigour: float, rng: np.random.Generator) -> dict:
+    """Speed-dependent parameters as smooth functions of cadence, with trial noise."""
+    z = (cadence - _CADENCE_REF) / _CADENCE_SCALE  # ~ -1 slow, 0 normal, +1 fast
+    amp = subject_vigour * rng.normal(1.0, 0.12)
+    return {
+        "stance_frac": float(np.clip(0.62 - 0.04 * z + rng.normal(0.0, 0.015), 0.5, 0.75)),
+        "stride_cv": float(np.clip(0.025 - 0.0075 * z, 0.01, 0.05) * rng.uniform(0.8, 1.2)),
+        "acc_amp": float(max(0.5, 3.5 * (1 + 0.43 * z) * amp)),  # m/s^2
+        "gyro_amp": float(max(40.0, 250.0 * (1 + 0.40 * z) * amp)),  # deg/s
+        "heel_impact": float(max(0.6, (1.0 + 0.15 * z) * rng.normal(1.0, 0.05))),
+    }
+
 
 # Pressure bump (centre, width) in normalized stance phase [0, 1].
 _FSR_BUMPS = {"heel": (0.12, 0.09), "meta": (0.50, 0.18), "toe": (0.85, 0.09)}
@@ -48,6 +64,7 @@ class SubjectParams:
     weight_factor: float  # scales pressure
     cadence_offset: float  # steps/min added to every trial
     pressure_asymmetry: float  # right foot load = left * (1 - a)
+    vigour: float  # scales IMU movement amplitude
     imu_gain: np.ndarray  # shape (4, 6): mounting/sensitivity gain
     imu_offset: np.ndarray  # shape (4, 6): mounting bias
 
@@ -72,6 +89,7 @@ def make_subject(index: int, rng: np.random.Generator) -> SubjectParams:
         weight_factor=float(rng.uniform(0.7, 1.3)),
         cadence_offset=float(rng.normal(0.0, 5.0)),
         pressure_asymmetry=float(rng.uniform(0.0, 0.12)),
+        vigour=float(rng.uniform(0.75, 1.25)),
         imu_gain=rng.uniform(0.8, 1.2, size=(4, 6)),
         imu_offset=rng.normal(0.0, 0.3, size=(4, 6)),
     )
@@ -152,8 +170,9 @@ def generate_trial(
     cadence = _CADENCE_MEAN[speed] + subject.cadence_offset + rng.normal(0.0, _CADENCE_TRIAL_SD)
     cadence = float(np.clip(cadence, 70.0, 150.0))
     stride_mean = 120.0 / cadence  # one stride = two steps
-    stride_cv = float(_STRIDE_CV[speed] * rng.uniform(0.8, 1.2))
-    stance_l = float(_STANCE_FRAC[speed] + rng.normal(0.0, 0.015))
+    p = _intensity_params(cadence, subject.vigour, rng)
+    stride_cv = p["stride_cv"]
+    stance_l = p["stance_frac"]
     stance_r = float(stance_l * (1 - subject.pressure_asymmetry / 3))
 
     t = np.arange(0.0, duration_s, 1.0 / SAMPLING_RATE_HZ)
@@ -171,7 +190,7 @@ def generate_trial(
     k_r, ph_r = _phase(t, hs_right)
 
     amp = _FSR_BASE_AMP * subject.weight_factor
-    impact = _HEEL_IMPACT[speed]
+    impact = p["heel_impact"]
     left = _foot_pressure(ph_l, stance_l, amp, impact, rng)
     right = _foot_pressure(ph_r, stance_r, amp * (1 - subject.pressure_asymmetry), impact, rng)
 
@@ -180,7 +199,7 @@ def generate_trial(
         cols[f"fsr_l_{site}"] = left[site]
         cols[f"fsr_r_{site}"] = right[site]
 
-    acc, gyro = _ACC_AMP[speed], _GYRO_AMP[speed]
+    acc, gyro = p["acc_amp"], p["gyro_amp"]
     placements = [
         (k_l + ph_l, 1.0),
         (k_r + ph_r, 1.0),
