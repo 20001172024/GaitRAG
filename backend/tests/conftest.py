@@ -59,3 +59,43 @@ def db_session(db_engine):
         with Session(bind=conn, join_transaction_mode="create_savepoint") as session:
             yield session
         trans.rollback()
+
+
+CORPUS = [
+    ("P001", "Gait variability", "Stride time variability (CV) rose when walking speed decreased."),
+    ("P001", "Gait variability", "Variability was measured over forty strides per subject."),
+    ("P002", "Insole design", "The insole has sixteen piezoresistive pressure sensors."),
+    ("P002", "Insole design", "Heel strike was detected when heel pressure exceeded a threshold."),
+    ("P003", "Cadence norms", "Cadence in healthy adults was about 110 steps per minute."),
+]
+
+
+@pytest.fixture
+def seeded(db_session):
+    """Five chunks from three papers, embedded with the model-free HashingEmbedder."""
+    from app.db.models import Chunk, Paper
+    from app.rag.embeddings import HashingEmbedder, passage_text
+
+    embedder = HashingEmbedder()
+    for pid in {p for p, _, _ in CORPUS}:
+        title = next(t for p, t, _ in CORPUS if p == pid)
+        db_session.add(
+            Paper(paper_id=pid, title=title, licence="CC-BY", source_url="u", pdf_url="u")
+        )
+    db_session.flush()
+    for i, (pid, title, body) in enumerate(CORPUS):
+        emb = embedder.embed_passages([passage_text(title, "Results", body)])[0]
+        db_session.add(
+            Chunk(
+                paper_id=pid,
+                chunk_index=i,
+                page=i + 1,
+                section="Results",
+                text=body,
+                token_count=len(body.split()),
+                content_hash=str(i),
+                embedding=emb.tolist(),
+            )
+        )
+    db_session.flush()
+    return db_session, embedder

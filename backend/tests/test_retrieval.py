@@ -4,7 +4,7 @@ import pytest
 
 from app.config import Settings
 from app.db.models import Chunk, Paper
-from app.rag.embeddings import HashingEmbedder, passage_text
+from app.rag.embeddings import HashingEmbedder
 from app.rag.reranker import KeywordOverlapReranker
 from app.rag.retriever import BM25Index, ChunkInfo, Retriever, rrf_fuse, tokenize
 
@@ -47,42 +47,6 @@ def test_bm25_ranks_matching_chunk_first_and_skips_zero_scores() -> None:
     hits = index.search("stride time variability", k=5)
     assert hits[0][0] == 2
     assert all(score > 0 for _, score in hits)
-
-
-CORPUS = [
-    ("P001", "Gait variability", "Stride time variability (CV) rose when walking speed decreased."),
-    ("P001", "Gait variability", "Variability was measured over forty strides per subject."),
-    ("P002", "Insole design", "The insole has sixteen piezoresistive pressure sensors."),
-    ("P002", "Insole design", "Heel strike was detected when heel pressure exceeded a threshold."),
-    ("P003", "Cadence norms", "Cadence in healthy adults was about 110 steps per minute."),
-]
-
-
-@pytest.fixture
-def seeded(db_session):
-    embedder = HashingEmbedder()
-    for pid in {p for p, _, _ in CORPUS}:
-        title = next(t for p, t, _ in CORPUS if p == pid)
-        db_session.add(
-            Paper(paper_id=pid, title=title, licence="CC-BY", source_url="u", pdf_url="u")
-        )
-    db_session.flush()
-    for i, (pid, title, body) in enumerate(CORPUS):
-        emb = embedder.embed_passages([passage_text(title, "Results", body)])[0]
-        db_session.add(
-            Chunk(
-                paper_id=pid,
-                chunk_index=i,
-                page=i + 1,
-                section="Results",
-                text=body,
-                token_count=len(body.split()),
-                content_hash=str(i),
-                embedding=emb.tolist(),
-            )
-        )
-    db_session.flush()
-    return db_session, embedder
 
 
 def _retriever(embedder, **settings) -> Retriever:
