@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** M2 (paper ingestion). See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
+**Status:** M3 (retrieval). See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
 
 ## Quick start (Docker)
 
@@ -100,6 +100,25 @@ The `flags` column gives automatic hints: no or unusual units, a value outside r
 
 - Papers without JATS XML rely on PDF table detection, which handles rotated tables and dot-leader layouts poorly.
 - Section detection relies on standard section names. Unusual layouts fall back to the previous section label.
+
+## Retrieval (M3)
+
+```
+query ─► vector (pgvector, cosine, top 50) ─┐
+     └─► BM25 (rank_bm25, top 50)        ───┴─► RRF (k = 60) ─► cross-encoder rerank (top 30) ─► top 8
+```
+
+- **Hybrid search.** Embeddings capture paraphrases, while BM25 catches exact terms such as "CoV" or "PODOSmart". The two rankings are merged with Reciprocal Rank Fusion, which uses ranks only, so there are no score scales to normalize.
+- **Vector search detail.** pgvector's HNSW search examines only `hnsw.ef_search` candidates (default 40), so `LIMIT 50` silently returned 40 rows. The retriever raises it per query, and a test covers this.
+- **Feature queries.** One query per gait feature, including the predicted speed class and leaving out the user's numbers.
+- **Ablations.** Set `RETRIEVAL_MODE=vector|bm25|hybrid` and `RERANK=true|false`, or override per request:
+
+```bash
+curl -X POST localhost:8000/search -H 'Content-Type: application/json' \
+  -d '{"query": "stride time variability at slow speed", "mode": "hybrid", "rerank": true}'
+```
+
+Latency, measured on the 4-core development sandbox (CPU only, median per query, 921 chunks): vector 22 ms, BM25 2 ms, hybrid 23 ms, hybrid + `bge-reranker-base` reranking 30 candidates about 6.9 s. These are development measurements; the end-to-end p50/p95 numbers come from `eval/run_latency_eval.py` in M6.
 
 ## Data policy
 
