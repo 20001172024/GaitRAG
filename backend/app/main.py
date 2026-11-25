@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api import analyze, health
+from app.api import analyze, health, papers
 from app.config import get_settings
 from app.constants import DISCLAIMER
 
@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(analyze.router)
+    app.include_router(papers.router)
     return app
 
 
