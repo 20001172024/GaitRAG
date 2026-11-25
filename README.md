@@ -81,7 +81,7 @@ Evaluation uses `GroupKFold` by subject, so no person appears in both training a
 ## Paper corpus (M2)
 
 ```bash
-python scripts/download_papers.py   # PDFs -> data/papers/pdfs/ (git-ignored), MD5-checked
+python scripts/download_papers.py   # PDFs + JATS XML -> data/papers/pdfs/ (git-ignored), MD5-checked
 python scripts/ingest_papers.py     # parse, chunk, embed -> Postgres; refresh norms_review.csv
 ```
 
@@ -89,13 +89,14 @@ python scripts/ingest_papers.py     # parse, chunk, embed -> Postgres; refresh n
 - **Parsing.** PyMuPDF page by page, so every passage keeps its page number. The parser removes running headers and footers, normalizes ligatures, re-joins hyphenated words and labels standard sections. References, back matter and text inside tables are dropped.
 - **Chunking.** About 300 tokens per chunk (bge tokenizer), split at sentence boundaries, with up to 50 tokens of whole-sentence overlap. Chunks never cross a page or section break, so a citation's page is exact.
 - **Embeddings.** `BAAI/bge-small-en-v1.5`, 384 dimensions, normalized. Each chunk is embedded with a "title > section" header. Queries use bge's instruction prefix. They are stored in pgvector with an HNSW cosine index, plus a generated `tsvector` column for keyword search (M3).
-- **Tables to norms.** Tables are extracted as cells, and rules propose candidate values (cadence, stride time and its CV, stance/swing %, symmetry, gait speed) into [`data/papers/norms_review.csv`](data/papers/norms_review.csv). **A person approves each value.** Only approved rows whose text still appears verbatim in the source table are loaded into the `norms` table.
+- **Tables.** Tables are taken from PMC's JATS XML, which gives exact cells and merged-cell spans and was more accurate than reading PDF layout. Each XML table is placed on the PDF page that contains its caption *and* its own numbers, so table citations keep exact pages. PDF table detection (PyMuPDF) is the fallback for tables the XML lacks.
+- **Tables to norms.** Rules propose candidate values (cadence, stride time and its CV, stance/swing %, symmetry, gait speed) into [`data/papers/norms_review.csv`](data/papers/norms_review.csv). **A person approves each value.** Only approved rows whose text still appears verbatim in the source table are loaded into the `norms` table.
 
 Set `decision` to `approve` or `reject` in the review CSV (you may correct metric, population, units or the parsed numbers), then re-run `ingest_papers.py`. Unchanged PDFs are skipped and reviewer edits are kept.
 
 ### Known limitations (M2)
 
-- Rotated tables and tables drawn with dot leaders are extracted poorly, so some papers' key normative tables yield no candidates.
+- Papers without JATS XML rely on PDF table detection, which handles rotated tables and dot-leader layouts poorly.
 - Section detection relies on standard section names. Unusual layouts fall back to the previous section label.
 
 ## Data policy
