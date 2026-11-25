@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://gaitrag:change-me@localhost:5432/gaitrag"
 
     embedding_model: str = "BAAI/bge-small-en-v1.5"
-    reranker_model: str = "BAAI/bge-reranker-base"
+    # Default is the small MiniLM cross-encoder: on a 4-core CPU it reranked 30 pairs in
+    # ~0.7 s vs ~5.3 s for BAAI/bge-reranker-base. Both are compared in the M6 ablation.
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
 
     # Retrieval (M3). Each stage can be switched off for the ablation study.
     retrieval_mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
