@@ -92,7 +92,9 @@ python scripts/ingest_papers.py     # parse, chunk, embed -> Postgres; refresh n
 - **Tables.** Tables are taken from PMC's JATS XML, which gives exact cells and merged-cell spans and was more accurate than reading PDF layout. Each XML table is placed on the PDF page that contains its caption *and* its own numbers, so table citations keep exact pages. PDF table detection (PyMuPDF) is the fallback for tables the XML lacks.
 - **Tables to norms.** Rules propose candidate values (cadence, stride time and its CV, stance/swing %, symmetry, gait speed) into [`data/papers/norms_review.csv`](data/papers/norms_review.csv). **A person approves each value.** Only approved rows whose text still appears verbatim in the source table are loaded into the `norms` table.
 
-Set `decision` to `approve` or `reject` in the review CSV (you may correct metric, population, units or the parsed numbers), then re-run `ingest_papers.py`. Unchanged PDFs are skipped and reviewer edits are kept.
+Set `decision` to `approve` or `reject` in the review CSV (you may correct metric, population, units or the parsed numbers), then re-run `ingest_papers.py`. Unchanged PDFs are skipped. Your edits are kept for every row that has a decision or a note; untouched rows are refreshed from extraction.
+
+The `flags` column gives automatic hints: no or unusual units, a value outside rough plausibility bounds, SD larger than the mean, a missing population, or a reliability, regression or validation table. **The bounds are sanity limits chosen for this project, not published norms.** A flag is not a decision; it only shows where to look first.
 
 ### Known limitations (M2)
 

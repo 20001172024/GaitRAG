@@ -155,3 +155,28 @@ def test_section_rows_label_the_rows_below() -> None:
 
 def test_unicode_minus_is_parsed() -> None:
     assert parse_value("−0.42 ± 0.10").mean == -0.42
+
+
+def test_cov_in_row_label_is_variability_not_phase_percent() -> None:
+    table = RawTable(
+        11,
+        "3",
+        "Table 3",
+        [
+            ["", "Total"],
+            ["SWING TIME", "SWING TIME"],
+            ["CoV (%)", "4.2 ± 1.8"],
+            ["STRIDE TIME", "STRIDE TIME"],
+            ["CoV (%)", "2.2 ± 1.1"],
+        ],
+        source="xml",
+        n_header_rows=1,
+    )
+    assert [(c.metric, c.value_text) for c in extract_candidates("P001", table)] == [
+        ("stride_time_cv", "2.2 ± 1.1")
+    ]
+
+
+def test_units_anywhere_in_label_and_sample_sizes_skipped() -> None:
+    assert units_of("WALKING SPEED (CM/S) mean ± SD") == "CM/S"
+    assert units_of("Female (n = 437)") is None

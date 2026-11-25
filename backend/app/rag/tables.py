@@ -55,6 +55,7 @@ _VALUE_PATTERNS = [
     ("range", re.compile(rf"^[(\[]?\s*({_NUM})\s*[–—]\s*({_NUM})\s*[)\]]?$")),
     ("plain", re.compile(rf"^({_NUM}){_MARKERS}$")),
 ]
+_CV = re.compile(r"\bco?v\b|coefficient of variation", re.IGNORECASE)
 _MEAN_HEADER = re.compile(r"mean|median|average|μ", re.IGNORECASE)
 # "Speed 1.6 km/h" or "at 4 km/h" is a test condition, not a measured value.
 _CONDITION = re.compile(r"\d+(?:\.\d+)?\s*(?:km/h|m/s|kmh)", re.IGNORECASE)
@@ -73,7 +74,7 @@ RELEVANT_METRICS = frozenset(
 )
 """Metrics that GaitRAG features are compared against; others are not extracted."""
 
-_UNITS = re.compile(r"[(\[]\s*([^()\[\]]{1,20}?)\s*[)\]]\s*\.?$")
+_UNITS = re.compile(r"[(\[]\s*([^()\[\]]{1,20}?)\s*[)\]]")
 
 
 @dataclass(frozen=True)
@@ -144,9 +145,14 @@ def parse_value(cell: str) -> ParsedValue | None:
 
 
 def units_of(label: str) -> str | None:
-    """Units in trailing parentheses/brackets: "cadence [steps/min]" -> "steps/min"."""
-    m = _UNITS.search(label)
-    return m.group(1).strip() if m else None
+    """Units in parentheses/brackets: "cadence [steps/min]" -> "steps/min".
+
+    Takes the last unit-like group, wherever it is ("WALKING SPEED (CM/S) mean ± SD"),
+    skipping sample sizes such as "(n = 437)".
+    """
+    groups = [g.strip() for g in _UNITS.findall(label)]
+    units = [g for g in groups if "=" not in g and re.search(r"[A-Za-z%μ]", g)]
+    return units[-1] if units else None
 
 
 def refine_metric(metric: str, units: str | None) -> str:
@@ -232,7 +238,8 @@ def extract_candidates(paper_id: str, table: RawTable) -> list[NormCandidate]:
             # Metric from the row -> group from the column, and vice versa.
             units = units_of(row_label) if row_metric else units_of(header)
             group = header if row_metric else row_label
-            if re.search(r"\bcv\b|coefficient of variation", header, re.IGNORECASE):
+            # Variability (CV/CoV) in the row label or header: "SWING TIME CoV (%)" is not swing %.
+            if metric != "stride_time_cv" and _CV.search(f"{row_label} {header}"):
                 metric = "stride_time_cv" if metric == "stride_time" else f"{metric}_cv"
             population = " | ".join(p for p in (group, *row_context, value.cell_label) if p)
             metric = refine_metric(metric, units)

@@ -93,13 +93,16 @@ def test_merge_keeps_reviewer_edits_and_decided_rows() -> None:
     reviewed = candidate_row(_candidate("abc")) | {"decision": "approve", "population": "Edited"}
     stale_decided = candidate_row(_candidate("old")) | {"decision": "reject"}
     stale_open = candidate_row(_candidate("gone"))
+    untouched = candidate_row(_candidate("fresh")) | {"units": "old-units"}
     merged = merge_review(
-        [_candidate("abc"), _candidate("new")], [reviewed, stale_decided, stale_open]
+        [_candidate("abc"), _candidate("new"), _candidate("fresh")],
+        [reviewed, stale_decided, stale_open, untouched],
     )
     by_id = {r["candidate_id"]: r for r in merged}
     assert by_id["abc"]["decision"] == "approve" and by_id["abc"]["population"] == "Edited"
     assert by_id["new"]["decision"] == ""
     assert "old" in by_id and "gone" not in by_id
+    assert by_id["fresh"]["units"] == "steps/min"  # untouched row refreshed from extraction
 
 
 def test_only_verified_approved_rows_are_loaded(db_session) -> None:
@@ -127,3 +130,25 @@ def test_only_verified_approved_rows_are_loaded(db_session) -> None:
         110.2,
         8.1,
     )
+
+
+def _row(**kw) -> dict[str, str]:
+    base = candidate_row(_candidate("x"))
+    return base | {k: str(v) for k, v in kw.items()}
+
+
+def test_plausible_value_has_no_flags() -> None:
+    from app.rag.norms_review import plausibility_flags
+
+    assert plausibility_flags(_row()) == ""
+
+
+def test_flags_point_out_suspicious_rows() -> None:
+    from app.rag.norms_review import plausibility_flags
+
+    assert "outside plausible" in plausibility_flags(_row(mean=1.92))
+    assert "steps/s" in plausibility_flags(_row(units="steps/sec", mean=1.68, sd=0.14))
+    assert "sd > mean" in plausibility_flags(_row(mean=5, sd=9))
+    assert "no units" in plausibility_flags(_row(units=""))
+    assert "normative value?" in plausibility_flags(_row(caption="Table 2. Reliability (ICC)"))
+    assert "unusual units" in plausibility_flags(_row(metric="symmetry_index", units="m"))
