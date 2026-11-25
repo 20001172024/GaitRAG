@@ -1,6 +1,7 @@
 """Application settings loaded from environment variables (and `.env`)."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,6 +27,10 @@ class Settings(BaseSettings):
 
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
+
+    # Speed classifier. None = the committed model at backend/models/speed_rf.joblib.
+    speed_model_path: Path | None = None
+    max_upload_mb: float = 10.0
 
     @property
     def cors_origin_list(self) -> list[str]:

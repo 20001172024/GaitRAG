@@ -8,6 +8,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY app ./app
+COPY models ./models
 RUN pip install --no-cache-dir -e ".[dev]"
 
 EXPOSE 8000
