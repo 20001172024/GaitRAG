@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** M5 (frontend). The OpenAI call is built and unit-tested but not yet verified against the live API, which needs a key. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
+**Status:** M6 (evaluation). The scripts are ready; results need the owner's question set, an LLM API key and approved norms. The OpenAI call is unit-tested but not yet verified against the live API. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
 
 ## Quick start (Docker)
 
@@ -149,6 +149,24 @@ Open http://localhost:5173 and click **Slow / Normal / Fast walk**. These are sy
 4. **What the literature says:** an automatic cited explanation from `/ask`, with clickable citation chips that open the source (title, authors, page, table, licence, supporting passage and a link to the open-access paper), plus a follow-up question box.
 
 Without an LLM key the explanation section says so, and the analysis still works.
+
+## Evaluation (M6)
+
+The evaluation scripts are in [`eval/`](eval/README.md). The question set, `eval/questions.jsonl`, is written by the project owner (50–100 questions of types `norm_lookup`, `method_comparison`, `feature_interpretation` and `unanswerable`).
+
+```bash
+python eval/run_retrieval_eval.py        # Recall@5/10, MRR for the 5 ablation configs
+python eval/run_generation_eval.py       # abstention P/R, citations, latency (needs an LLM key)
+python eval/run_latency_eval.py          # p50/p95 of /analyze, /search, /ask (running API)
+```
+
+**Results:** not available yet. No numbers are reported until they come from real runs on the owner's questions. A placeholder file (`eval/questions.example.jsonl`) exists only to test the scripts, and runs on it are labelled `PLACEHOLDER` and git-ignored.
+
+- **Retrieval ablations:** (1) vector, (2) BM25, (3) hybrid RRF, (4) + reranker, (5) + table chunks. Running with `--reranker BAAI/bge-reranker-base` compares the two rerankers.
+- **Generation:** the same pipeline as `/ask`. Use `--no-norms` for the norms-lookup ablation, and set `LLM_PROVIDER` to compare OpenAI with HuggingFace.
+- **Citation accuracy:** each run writes a citation-check sheet. Mark `supported` with yes or no, then score it with `--score-citations`.
+- **Gate calibration:** the retrieval run suggests `MIN_RERANK_SCORE` from the reranker scores of answerable vs unanswerable questions.
+- **Not yet included:** RAGAS metrics, which need an LLM judge.
 
 ## Data policy
 
