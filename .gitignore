@@ -28,3 +28,6 @@ data/papers/pdfs/*
 !data/papers/pdfs/.gitkeep
 data/raw/
 data/synthetic/
+
+# Evaluation runs on placeholder questions are never results
+eval/results/PLACEHOLDER_*
