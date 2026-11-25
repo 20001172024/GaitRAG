@@ -3,7 +3,7 @@
 from app.rag.query_builder import build_feature_queries
 
 
-def test_feature_queries_one_per_feature_with_speed_and_no_numbers() -> None:
+def test_feature_queries_one_per_feature_without_numbers_or_speed() -> None:
     features = {
         "cadence_steps_per_min": 112.4,
         "stride_time_s": 1.07,
@@ -19,11 +19,11 @@ def test_feature_queries_one_per_feature_with_speed_and_no_numbers() -> None:
         "stance_swing",
         "asymmetry",
     ]
-    assert "fast walking speed" in queries[0].query
     assert not any(any(ch.isdigit() for ch in q.query) for q in queries)
+    # Speed is kept on the query object, not in the text (it biased retrieval).
+    assert all(q.speed == "fast" and "speed" not in q.query for q in queries)
 
 
-def test_feature_queries_skip_missing_features_and_unknown_speed() -> None:
+def test_feature_queries_skip_missing_features() -> None:
     queries = build_feature_queries({"cadence_steps_per_min": 100.0}, None)
-    assert len(queries) == 1
-    assert "different walking speeds" in queries[0].query
+    assert [(q.feature, q.speed) for q in queries] == [("cadence", None)]
