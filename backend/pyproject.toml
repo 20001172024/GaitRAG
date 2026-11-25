@@ -28,6 +28,7 @@ dependencies = [
     "alembic>=1.13",
     # Install CPU-only torch first (see Dockerfile / CI), or pip pulls the CUDA build.
     "sentence-transformers>=3.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]

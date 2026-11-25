@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -24,6 +25,16 @@ class Settings(BaseSettings):
 
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     reranker_model: str = "BAAI/bge-reranker-base"
+
+    # Retrieval (M3). Each stage can be switched off for the ablation study.
+    retrieval_mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
+    rerank: bool = True
+    vector_candidates: int = 50  # top-k from pgvector
+    bm25_candidates: int = 50  # top-k from BM25
+    rrf_k: int = 60  # Reciprocal Rank Fusion constant (Cormack et al., 2009)
+    rerank_candidates: int = 30  # fused hits passed to the cross-encoder
+    top_k: int = 8  # hits returned
+    hnsw_ef_search: int = 100  # must be >= vector_candidates, see app.rag.retriever
 
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
