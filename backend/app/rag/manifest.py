@@ -26,6 +26,8 @@ MANIFEST_COLUMNS = [
     "source_url",
     "pdf_url",
     "pdf_md5",
+    "xml_url",
+    "xml_md5",
 ]
 
 ALLOWED_LICENCES = frozenset({"CC-BY", "CC-BY-SA", "CC0"})
@@ -52,11 +54,18 @@ class ManifestEntry:
     source_url: str
     pdf_url: str
     pdf_md5: str
+    xml_url: str = ""  # optional JATS XML (structured tables), same source as the PDF
+    xml_md5: str = ""
 
     @property
     def pdf_path(self) -> Path:
         """Local path of the downloaded PDF."""
         return PDF_DIR / f"{self.paper_id}.pdf"
+
+    @property
+    def xml_path(self) -> Path:
+        """Local path of the downloaded JATS XML (next to the PDF, also git-ignored)."""
+        return PDF_DIR / f"{self.paper_id}.xml"
 
 
 def normalize_licence(raw: str) -> str:
@@ -97,6 +106,8 @@ def parse_row(row: dict[str, str]) -> ManifestEntry:
         source_url=row["source_url"].strip(),
         pdf_url=row["pdf_url"].strip(),
         pdf_md5=row.get("pdf_md5", "").strip().lower(),
+        xml_url=(row.get("xml_url") or "").strip(),
+        xml_md5=(row.get("xml_md5") or "").strip().lower(),
     )
 
 

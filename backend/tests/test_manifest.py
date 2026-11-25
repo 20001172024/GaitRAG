@@ -115,5 +115,18 @@ def test_download_rejects_md5_mismatch(tmp_path: Path, monkeypatch) -> None:
 def test_download_rejects_non_pdf(tmp_path: Path, monkeypatch) -> None:
     dl = _downloader()
     entry = _entry(tmp_path, monkeypatch, "")
-    with pytest.raises(ValueError, match="not a PDF"):
+    with pytest.raises(ValueError, match="unexpected content"):
         dl.download(entry, _client(b"<html>challenge</html>"))
+
+
+def test_download_fetches_xml_when_listed(tmp_path: Path, monkeypatch) -> None:
+    dl = _downloader()
+    monkeypatch.setattr("app.rag.manifest.PDF_DIR", tmp_path)
+    entry = parse_row(_row(xml_url="https://example.org/a.xml"))
+    bodies = {"/a.pdf": b"%PDF-1.7 fake", "/a.xml": b'<?xml version="1.0"?><article/>'}
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, content=bodies[req.url.path]))
+    )
+    assert dl.download(entry, client) == "downloaded"
+    assert entry.xml_path.read_bytes().startswith(b"<?xml")
+    assert dl.download(entry, client) == "skipped"
