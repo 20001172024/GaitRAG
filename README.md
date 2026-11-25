@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** M3 (retrieval). See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
+**Status:** M4 (generation). The OpenAI call is built and unit-tested but not yet verified against the live API, which needs a key. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
 
 ## Quick start (Docker)
 
@@ -121,6 +121,23 @@ curl -X POST localhost:8000/search -H 'Content-Type: application/json' \
 ```
 
 Latency, measured on the 4-core development sandbox (CPU only, median per query): vector 22 ms, BM25 2 ms, hybrid 23 ms, hybrid + MiniLM rerank about 0.8 s (about 4 s for a recording's 5 feature queries). These are development measurements; the end-to-end p50/p95 numbers come from `eval/run_latency_eval.py` in M6.
+
+## Generation (M4)
+
+```bash
+curl -X POST localhost:8000/ask -H 'Content-Type: application/json' -d '{
+  "question": "Is my cadence typical for my walking speed?",
+  "features": {"cadence_steps_per_min": 112.0, "stride_time_cv_pct": 2.1},
+  "prediction": "normal"}'
+```
+
+1. **Retrieve.** Passages for the question and for each feature are merged round-robin, deduplicated and capped at `MAX_CONTEXT_CHUNKS` (8).
+2. **Compare with norms, in code.** Each feature is compared with every *approved* norm row: unit conversion, z-score, and within mean ± 1 SD (or the published range). The LLM only explains these numbers and never computes them. The same comparisons fill `norms_comparison` in `/analyze`.
+3. **Generate.** Temperature 0, with one prompt for every provider. Each source has a ready-made label such as `[P006, p.5, Table 2]` that the model must copy after every factual sentence. Source text is treated as data, and diagnosis or medical advice is forbidden.
+4. **Check citations.** Every label in the answer must be one that was provided, and there must be at least one. If not, the model gets one retry with specific feedback; after that the answer is reported as **insufficient evidence**. Unverified citations never reach the user.
+5. **Insufficient-evidence mode.** This applies with no sources, when the model replies `INSUFFICIENT_EVIDENCE`, or after a failed citation check. A threshold on the best reranker score (`MIN_RERANK_SCORE`) is off until it is calibrated on unanswerable questions in M6.
+
+**Providers.** OpenAI and HuggingFace Inference Providers both speak the chat-completions API, so one `httpx` client serves both. Choose one with `LLM_PROVIDER=openai|huggingface` and `LLM_MODEL`, with the key in `OPENAI_API_KEY` or `HF_API_TOKEN`. Without a key, `/ask` returns `503`; `/analyze` and `/search` still work.
 
 ## Data policy
 
