@@ -216,6 +216,20 @@ def _find_caption(blocks: list[tuple], bbox: pymupdf.Rect) -> tuple[str | None, 
     return (best[1], best[2]) if best else (None, None)
 
 
+def _cell_text(page: pymupdf.Page, bbox: tuple | None) -> str | None:
+    """Read one cell's text by its bounding box.
+
+    find_tables().extract() drops decimal points in some fonts (they sit slightly
+    off the baseline and get grouped onto another line, so "129.9 ± 18.0" came
+    out as "1299±180 . ."). Reading the cell box with get_textbox() is correct,
+    so the table finder is used for cell *positions* only.
+    """
+    if bbox is None:  # merged cell
+        return None
+    text = unicodedata.normalize("NFKC", page.get_textbox(pymupdf.Rect(bbox)))
+    return re.sub(r"\s+", " ", text).strip() or None
+
+
 def _page_text_and_tables(page: pymupdf.Page, page_no: int) -> tuple[str, list[RawTable]]:
     found = page.find_tables().tables
     boxes = [pymupdf.Rect(t.bbox) for t in found]
@@ -230,10 +244,7 @@ def _page_text_and_tables(page: pymupdf.Page, page_no: int) -> tuple[str, list[R
     tables = []
     for t, box in zip(found, boxes, strict=True):
         table_no, caption = _find_caption(blocks, box)
-        cells = [
-            [unicodedata.normalize("NFKC", c).strip() if c else None for c in row]
-            for row in t.extract()
-        ]
+        cells = [[_cell_text(page, c) for c in row.cells] for row in t.rows]
         tables.append(RawTable(page_no, table_no, caption, cells))
     return text, tables
 
