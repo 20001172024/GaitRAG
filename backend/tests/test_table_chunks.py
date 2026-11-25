@@ -49,3 +49,15 @@ def test_large_tables_split_by_rows_and_repeat_caption() -> None:
 def test_uncaptioned_table_gets_a_generic_caption() -> None:
     t = RawTable(1, None, None, [["", "Mean"], ["Cadence", "110.2"]])
     assert table_to_chunks(t, words)[0].text.splitlines()[0] == "Table"
+
+
+def test_overlong_row_is_split_keeping_its_label() -> None:
+    headers = [""] + [f"group {i}" for i in range(30)]
+    row = ["Cadence (steps/min)"] + [f"{100 + i}.0 ± 5.0" for i in range(30)]
+    wide = RawTable(4, "2", "Table 2 Wide", [headers, row], "xml", 1)
+    chunks = table_to_chunks(wide, words, max_tokens=40)
+    lines = [ln for c in chunks for ln in c.text.splitlines()[1:]]
+    assert len(lines) > 1
+    assert all(ln.startswith("Cadence (steps/min) — ") for ln in lines)
+    assert all(c.token_count <= 40 for c in chunks)
+    assert sum(ln.count("±") for ln in lines) == 30

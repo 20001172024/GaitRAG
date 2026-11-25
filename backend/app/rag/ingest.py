@@ -24,9 +24,9 @@ from app.rag.parsing import RawTable, parse_pdf
 from app.rag.table_chunks import table_to_chunks
 from app.rag.tables import NormCandidate, extract_candidates
 
-PIPELINE_VERSION = "2"
+PIPELINE_VERSION = "3"
 """Bump when parsing, chunking or table handling changes, to force re-ingestion.
-History: 1 = text chunks; 2 = + table chunks."""
+History: 1 = text chunks; 2 = + table chunks; 3 = wide table rows split."""
 
 
 @dataclass(frozen=True)

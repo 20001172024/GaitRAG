@@ -52,6 +52,32 @@ def table_lines(table: RawTable) -> list[str]:
     return lines
 
 
+def _fit_lines(lines: list[str], count_tokens: TokenCounter, budget: int) -> list[str]:
+    """Split any line over `budget` at its "; " pairs, repeating the row label.
+
+    A very wide row can exceed the embedding model's input limit on its own and
+    would be truncated at embedding time.
+    """
+    out = []
+    for line in lines:
+        if count_tokens(line) <= budget:
+            out.append(line)
+            continue
+        label, sep, rest = line.partition(" — ")
+        prefix = f"{label}{sep}" if sep else ""
+        pairs = (rest if sep else line).split("; ")
+        part: list[str] = []
+        for pair in pairs:
+            candidate = prefix + "; ".join([*part, pair])
+            if part and count_tokens(candidate) > budget:
+                out.append(prefix + "; ".join(part))
+                part = []
+            part.append(pair)
+        if part:
+            out.append(prefix + "; ".join(part))
+    return out
+
+
 def table_to_chunks(
     table: RawTable, count_tokens: TokenCounter, max_tokens: int = MAX_TOKENS
 ) -> list[TableChunk]:
@@ -66,7 +92,7 @@ def table_to_chunks(
 
     budget = max_tokens - count_tokens(caption)
     used = 0
-    for line in table_lines(table):
+    for line in _fit_lines(table_lines(table), count_tokens, budget):
         n = count_tokens(line)
         if current and used + n > budget:
             emit()
