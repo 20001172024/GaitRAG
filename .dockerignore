@@ -1,0 +1,10 @@
+.git
+.env
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/node_modules
+frontend/dist
+data/papers/pdfs
+data/synthetic
+eval/results
