@@ -35,6 +35,8 @@ services:
       - ./backend/app:/app/app
       - ./backend/tests:/app/tests
       - ./backend/models:/app/models
+      # Demo recordings for GET /samples (repo-relative path: /data/samples)
+      - ./data/samples:/data/samples:ro
     depends_on:
       db:
         condition: service_healthy
