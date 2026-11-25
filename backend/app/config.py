@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -39,8 +40,19 @@ class Settings(BaseSettings):
     top_k: int = 8  # hits returned
     hnsw_ef_search: int = 100  # must be >= vector_candidates, see app.rag.retriever
 
-    llm_provider: str = "openai"
+    # Generation (M4). Both providers speak the OpenAI chat-completions API.
+    llm_provider: Literal["openai", "huggingface"] = "openai"
     llm_model: str = "gpt-4o-mini"
+    openai_api_key: SecretStr | None = None
+    hf_api_token: SecretStr | None = None
+    llm_temperature: float = 0.0  # deterministic answers, reproducible eval
+    llm_max_tokens: int = 700
+    llm_timeout_s: float = 60.0
+    max_context_chunks: int = 8  # retrieved passages given to the LLM
+    # Skip the LLM and answer "insufficient evidence" when the best reranker score is
+    # below this. None = gate off: the value must be calibrated on unanswerable
+    # questions in M6, not guessed.
+    min_rerank_score: float | None = None
 
     # Speed classifier. None = the committed model at backend/models/speed_rf.joblib.
     speed_model_path: Path | None = None
