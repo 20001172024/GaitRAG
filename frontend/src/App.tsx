@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   analyzeRecording,
   ApiError,
@@ -14,10 +14,14 @@ import { Disclaimer } from "./components/Disclaimer";
 import { FeatureCards } from "./components/FeatureCards";
 import { FollowUpBox } from "./components/FollowUpBox";
 import { PredictionCard } from "./components/PredictionCard";
-import { SignalPlots } from "./components/SignalPlots";
 import { SourceDrawer, type SourceInfo } from "./components/SourceDrawer";
 import { UploadPanel } from "./components/UploadPanel";
 import { parseCsv, type Recording } from "./lib/csv";
+
+// The charting library is most of the bundle: load it only once a recording is shown.
+const SignalPlots = lazy(() =>
+  import("./components/SignalPlots").then((m) => ({ default: m.SignalPlots })),
+);
 
 export const EXPLAIN_QUESTION =
   "How do this recording's gait features compare with published values for healthy adults?";
@@ -137,7 +141,9 @@ export default function App() {
           <>
             <div className="grid gap-6 lg:grid-cols-[1fr_2fr]">
               <PredictionCard analysis={analysis} />
-              <SignalPlots recording={recording} />
+              <Suspense fallback={<p className="text-sm text-slate-500">Loading charts…</p>}>
+                <SignalPlots recording={recording} />
+              </Suspense>
             </div>
             <FeatureCards analysis={analysis} onOpenNorm={openNorm} />
 
