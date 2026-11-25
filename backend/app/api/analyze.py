@@ -11,12 +11,17 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
+from app.api.schemas import NormComparisonOut
 from app.config import Settings, get_settings
 from app.constants import DISCLAIMER
+from app.db.session import get_session
 from app.ml.classifier import DEFAULT_MODEL_PATH, ModelBundle, load_bundle, predict_recording
 from app.ml.gait_events import GaitEventError
 from app.ml.schema import SchemaError, read_recording
+from app.rag.norms import compare_features
 
 router = APIRouter(tags=["analysis"])
 
@@ -55,9 +60,10 @@ class AnalyzeResponse(BaseModel):
     confidence: float = Field(ge=0, le=1, description="Probability of the predicted class")
     probabilities: dict[str, float]
     features: GaitFeaturesOut
-    norms_comparison: list[dict] = Field(
+    norms_comparison: list[NormComparisonOut] = Field(
         default_factory=list,
-        description="Comparison with published norms. Empty until the paper corpus exists.",
+        description="Comparison with approved published norms (empty if none are approved "
+        "for these features, or the database is unavailable).",
     )
     model_info: ModelInfo
     disclaimer: str = DISCLAIMER
@@ -99,8 +105,9 @@ def analyze(
     file: Annotated[UploadFile, File(description="One walking trial as CSV (40 Hz)")],
     model: Annotated[ModelBundle, Depends(get_model)],
     settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[Session, Depends(get_session)],
 ) -> AnalyzeResponse:
-    """Classify walking speed and return interpretable gait features.
+    """Classify walking speed, return gait features and their comparison with norms.
 
     Plain `def` (not `async`): the work is CPU-bound, so FastAPI runs it in a
     thread pool instead of blocking the event loop.
@@ -112,11 +119,18 @@ def analyze(
     except (SchemaError, GaitEventError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
+    features = pred.gait.to_dict()
+    try:
+        comparisons = compare_features(session, features)
+    except SQLAlchemyError:
+        comparisons = []  # analysis still works without the paper database
+
     return AnalyzeResponse(
         prediction=pred.label,
         confidence=pred.confidence,
         probabilities=pred.probabilities,
-        features=GaitFeaturesOut(**pred.gait.to_dict()),
+        features=GaitFeaturesOut(**features),
+        norms_comparison=[NormComparisonOut.from_comparison(c) for c in comparisons],
         model_info=ModelInfo(
             trained_on=model.trained_on,
             normalization=model.normalization,

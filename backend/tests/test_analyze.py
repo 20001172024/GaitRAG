@@ -72,3 +72,33 @@ def test_missing_model_returns_503(override_settings, tmp_path: Path) -> None:
     override_settings(speed_model_path=tmp_path / "nope.joblib")
     content = (SAMPLES / "synthetic_normal.csv").read_bytes()
     assert _post_csv(content).status_code == 503
+
+
+def test_analyze_fills_norms_comparison_from_approved_norms(db_session) -> None:
+    from app.db.models import Norm, Paper
+    from app.db.session import get_session
+
+    db_session.add(Paper(paper_id="P003", title="t", licence="CC-BY", source_url="u", pdf_url="u"))
+    db_session.flush()
+    db_session.add(
+        Norm(
+            paper_id="P003",
+            page=6,
+            table_no="4",
+            metric="cadence",
+            population="20–29 | M",
+            value_text="109.88 (6.46)",
+            mean=109.88,
+            sd=6.46,
+            units="steps/min",
+        )
+    )
+    db_session.flush()
+    app.dependency_overrides[get_session] = lambda: db_session
+    try:
+        body = _post_csv((SAMPLES / "synthetic_normal.csv").read_bytes()).json()
+    finally:
+        app.dependency_overrides.clear()
+    (comp,) = body["norms_comparison"]
+    assert comp["feature"] == "cadence_steps_per_min" and comp["citation"] == "[P003, p.6, Table 4]"
+    assert comp["z_score"] == pytest.approx((comp["value"] - 109.88) / 6.46)
