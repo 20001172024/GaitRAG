@@ -56,6 +56,8 @@ class Settings(BaseSettings):
 
     # Speed classifier. None = the committed model at backend/models/speed_rf.joblib.
     speed_model_path: Path | None = None
+    # Production: serve the built frontend (frontend/dist) from the API's own origin.
+    frontend_dist: Path | None = None
     max_upload_mb: float = 10.0
 
     @property
