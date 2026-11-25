@@ -83,18 +83,19 @@ def answer_question(
     question: str,
     features: dict[str, float] | None = None,
     prediction: str | None = None,
+    use_norms: bool = True,
     **opts: object,
 ) -> PipelineResult:
     """Retrieve, compare with norms, generate and resolve citations.
 
-    `opts` are retrieval overrides (mode, rerank, tables). Database and LLM errors
-    propagate to the caller.
+    `opts` are retrieval overrides (mode, rerank, tables). `use_norms=False` skips the
+    approved-norms comparison (ablation). Database and LLM errors propagate.
     """
     timings: dict[str, float] = {}
     t = time.perf_counter()
     hits = retrieve_context(session, retriever, question, features, prediction, **opts)
     timings["retrieval_ms"] = (time.perf_counter() - t) * 1000
-    comparisons = compare_features(session, features or {})
+    comparisons = compare_features(session, features or {}) if use_norms else []
     papers = {p.paper_id: p for p in session.scalars(select(Paper))}
 
     t = time.perf_counter()
