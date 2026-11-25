@@ -169,7 +169,7 @@ def _is_data_row(row: list[str | None]) -> bool:
     return any(c and parse_value(c) for c in row[1:])
 
 
-def _column_headers(
+def column_headers(
     cells: list[list[str | None]], n_header_rows: int | None = None
 ) -> tuple[list[str], int]:
     """Join the header rows per column.
@@ -194,7 +194,7 @@ def _candidate_id(*parts: object) -> str:
     return hashlib.sha256("|".join(map(str, parts)).encode()).hexdigest()[:12]
 
 
-def _section_title(row: list[str | None]) -> str | None:
+def section_title(row: list[str | None]) -> str | None:
     """A full-width group heading row (e.g. "STRIDE TIME" spanning all columns)."""
     filled = {c for c in row if c}
     if len(filled) == 1:
@@ -206,11 +206,11 @@ def _section_title(row: list[str | None]) -> str | None:
 
 def extract_candidates(paper_id: str, table: RawTable) -> list[NormCandidate]:
     """Extract candidate norm values from one table (both orientations)."""
-    headers, first_data = _column_headers(table.cells, table.n_header_rows)
+    headers, first_data = column_headers(table.cells, table.n_header_rows)
     out: list[NormCandidate] = []
     section: str | None = None
     for i, row in enumerate(table.cells[first_data:], start=first_data):
-        title = _section_title(row)
+        title = section_title(row)
         if title is not None:
             section = title
             continue

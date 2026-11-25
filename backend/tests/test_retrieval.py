@@ -126,3 +126,64 @@ def test_overrides_are_validated(seeded) -> None:
         _retriever(embedder).retrieve(session, "x", mode="nope")
     with pytest.raises(ValueError, match="reranker"):
         Retriever(Settings(), embedder, None).retrieve(session, "x", rerank=True)
+
+
+def _add_table_chunk(session, embedder) -> None:
+    body = "Table 3 Reference values\nCadence (steps/min) — Young: 112.0 ± 8.0; Old: 104.5 ± 9.9"
+    session.add(
+        Chunk(
+            paper_id="P003",
+            chunk_index=99,
+            page=6,
+            kind="table",
+            table_no="3",
+            text=body,
+            token_count=20,
+            content_hash="t",
+            embedding=embedder.embed_passages([body])[0].tolist(),
+        )
+    )
+    session.flush()
+
+
+@pytest.mark.parametrize("mode", ["vector", "bm25"])
+def test_table_chunks_can_be_switched_off(seeded, mode: str) -> None:
+    session, embedder = seeded
+    _add_table_chunk(session, embedder)
+    retriever = _retriever(embedder, retrieval_mode=mode, rerank=False)
+    query = "cadence steps per minute reference values young old"
+    with_tables = retriever.retrieve(session, query, top_k=5, tables=True).hits
+    assert with_tables[0].chunk.kind == "table" and with_tables[0].chunk.table_no == "3"
+    without = retriever.retrieve(session, query, top_k=5, tables=False).hits
+    assert without and all(h.chunk.kind == "text" for h in without)
+
+
+def test_filtered_vector_search_still_returns_k_rows(db_session) -> None:
+    """With mostly table chunks near the query, the text-only filter must still fill k."""
+    from sqlalchemy import text
+
+    from app.rag.retriever import vector_search
+
+    embedder = HashingEmbedder()
+    db_session.add(Paper(paper_id="P001", title="t", licence="CC-BY", source_url="u", pdf_url="u"))
+    db_session.flush()
+    for i in range(80):
+        kind = "table" if i < 60 else "text"
+        body = f"cadence table row {i}" if kind == "table" else f"walking prose {i} cadence"
+        db_session.add(
+            Chunk(
+                paper_id="P001",
+                chunk_index=i,
+                page=1,
+                kind=kind,
+                text=body,
+                token_count=4,
+                content_hash=str(i),
+                embedding=embedder.embed_passages([body])[0].tolist(),
+            )
+        )
+    db_session.flush()
+    db_session.execute(text("SET LOCAL enable_seqscan = off"))
+    q = embedder.embed_query("cadence table row").tolist()
+    hits = vector_search(db_session, q, k=20, ef_search=20, tables=False)
+    assert len(hits) == 20

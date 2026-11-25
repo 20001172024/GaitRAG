@@ -21,7 +21,12 @@ from app.rag.embeddings import Embedder, passage_text
 from app.rag.jats import jats_tables_with_pages, merge_tables
 from app.rag.manifest import ManifestEntry
 from app.rag.parsing import RawTable, parse_pdf
+from app.rag.table_chunks import table_to_chunks
 from app.rag.tables import NormCandidate, extract_candidates
+
+PIPELINE_VERSION = "2"
+"""Bump when parsing, chunking or table handling changes, to force re-ingestion.
+History: 1 = text chunks; 2 = + table chunks."""
 
 
 @dataclass(frozen=True)
@@ -75,11 +80,12 @@ def ingest_paper(
         embedder: embedding model (also provides the token counter for chunking).
         force: re-ingest even if the PDF is unchanged.
     """
-    # Fingerprint of the source files (stored in papers.pdf_sha256): the PDF hash,
-    # combined with the XML hash when present, so a changed XML also re-ingests.
-    pdf_hash = sha256_of(entry.pdf_path)
+    # Fingerprint (stored in papers.pdf_sha256): PDF hash + XML hash + pipeline version,
+    # so a changed source file *or* a change to how papers are processed re-ingests.
+    parts = [sha256_of(entry.pdf_path), PIPELINE_VERSION]
     if entry.xml_path.exists():
-        pdf_hash = hashlib.sha256((pdf_hash + sha256_of(entry.xml_path)).encode()).hexdigest()
+        parts.append(sha256_of(entry.xml_path))
+    pdf_hash = hashlib.sha256("|".join(parts).encode()).hexdigest()
     paper = _upsert_paper(session, entry)
     n_existing = session.scalar(
         select(func.count()).select_from(Chunk).where(Chunk.paper_id == entry.paper_id)
@@ -95,8 +101,10 @@ def ingest_paper(
     )
     tables = merge_tables(xml_tables, parsed.tables)
     drafts = chunk_segments(parsed.segments, embedder.count_tokens)
+    table_drafts = [c for t in tables for c in table_to_chunks(t, embedder.count_tokens)]
     vectors = embedder.embed_passages(
         [passage_text(entry.title, d.section, d.text) for d in drafts]
+        + [passage_text(entry.title, None, t.text) for t in table_drafts]
     )
 
     session.execute(delete(Chunk).where(Chunk.paper_id == entry.paper_id))
@@ -112,7 +120,22 @@ def ingest_paper(
             content_hash=hashlib.sha256(d.text.encode()).hexdigest(),
             embedding=vec.tolist(),
         )
-        for i, (d, vec) in enumerate(zip(drafts, vectors, strict=True))
+        for i, (d, vec) in enumerate(zip(drafts, vectors[: len(drafts)], strict=True))
+    )
+    session.add_all(
+        Chunk(
+            paper_id=entry.paper_id,
+            chunk_index=len(drafts) + i,
+            page=t.page,
+            section=None,
+            kind="table",
+            table_no=t.table_no,
+            text=t.text,
+            token_count=t.token_count,
+            content_hash=hashlib.sha256(t.text.encode()).hexdigest(),
+            embedding=vec.tolist(),
+        )
+        for i, (t, vec) in enumerate(zip(table_drafts, vectors[len(drafts) :], strict=True))
     )
     session.add_all(
         PaperTable(
@@ -131,4 +154,5 @@ def ingest_paper(
     paper.ingested_at = datetime.now(UTC)
 
     candidates = [c for t in tables for c in extract_candidates(entry.paper_id, t)]
-    return IngestResult(entry.paper_id, "ingested", len(drafts), len(tables), candidates)
+    n_chunks = len(drafts) + len(table_drafts)
+    return IngestResult(entry.paper_id, "ingested", n_chunks, len(tables), candidates)

@@ -55,7 +55,11 @@ class Paper(Base):
 
 
 class Chunk(Base):
-    """A retrievable passage. Never spans a page break, so its citation page is exact."""
+    """A retrievable passage. Never spans a page break, so its citation page is exact.
+
+    kind "text": prose from the PDF. kind "table": a table's caption and rows as text,
+    cited with its table number.
+    """
 
     __tablename__ = "chunks"
     __table_args__ = (
@@ -74,6 +78,8 @@ class Chunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer)
     page: Mapped[int] = mapped_column(Integer)  # 1-based, as printed in citations
     section: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(8), server_default="text")  # "text" | "table"
+    table_no: Mapped[str | None] = mapped_column(String(16))  # set for kind == "table"
     text: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int] = mapped_column(Integer)
     content_hash: Mapped[str] = mapped_column(String(64))

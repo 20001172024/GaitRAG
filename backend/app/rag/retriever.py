@@ -1,7 +1,8 @@
 """Hybrid retrieval: BM25 + pgvector, fused with RRF, optionally reranked.
 
-Every stage is switchable (mode, rerank) so the ablation study can compare
-vector-only, BM25-only, hybrid and hybrid + reranker on the same code path.
+Every stage is switchable (mode, rerank, tables) so the ablation study can
+compare vector-only, BM25-only, hybrid, hybrid + reranker, with and without
+table chunks, on the same code path.
 
 - Vector: cosine distance on normalized bge embeddings via the HNSW index.
   pgvector's HNSW search only explores `hnsw.ef_search` candidates (default
@@ -65,6 +66,8 @@ class ChunkInfo:
     page: int
     section: str | None
     text: str
+    kind: str = "text"  # "text" | "table"
+    table_no: str | None = None
 
 
 @dataclass
@@ -93,33 +96,56 @@ class BM25Index:
         docs = [tokenize(passage_text(c.title, c.section, c.text)) for c in chunks]
         self.bm25 = BM25Okapi(docs) if docs else None
 
-    def search(self, query: str, k: int) -> list[tuple[int, float]]:
-        """Top-k (chunk_id, score) with a positive score."""
+    def search(self, query: str, k: int, tables: bool = True) -> list[tuple[int, float]]:
+        """Top-k (chunk_id, score) with a positive score; `tables=False` skips table chunks.
+
+        IDF is computed over the whole index either way, so switching tables off
+        changes which documents can be returned, not how terms are weighted.
+        """
         if self.bm25 is None:
             return []
         scores = self.bm25.get_scores(tokenize(query))
-        order = sorted(range(len(scores)), key=lambda i: -scores[i])[:k]
+        allowed = [i for i in range(len(scores)) if tables or self.chunks[i].kind == "text"]
+        order = sorted(allowed, key=lambda i: -scores[i])[:k]
         return [(self.chunks[i].chunk_id, float(scores[i])) for i in order if scores[i] > 0]
 
 
 def load_chunks(session: Session) -> dict[int, ChunkInfo]:
     """All chunks with their paper title, keyed by chunk id."""
     rows = session.execute(
-        select(Chunk.id, Chunk.paper_id, Paper.title, Chunk.page, Chunk.section, Chunk.text)
+        select(
+            Chunk.id,
+            Chunk.paper_id,
+            Paper.title,
+            Chunk.page,
+            Chunk.section,
+            Chunk.text,
+            Chunk.kind,
+            Chunk.table_no,
+        )
         .join(Paper, Paper.paper_id == Chunk.paper_id)
         .order_by(Chunk.id)
     )
-    return {r.id: ChunkInfo(r.id, r.paper_id, r.title, r.page, r.section, r.text) for r in rows}
+    return {
+        r.id: ChunkInfo(r.id, r.paper_id, r.title, r.page, r.section, r.text, r.kind, r.table_no)
+        for r in rows
+    }
 
 
 def vector_search(
-    session: Session, query_vec: list[float], k: int, ef_search: int
+    session: Session, query_vec: list[float], k: int, ef_search: int, tables: bool = True
 ) -> list[tuple[int, float]]:
-    """Top-k (chunk_id, cosine similarity) from pgvector."""
+    """Top-k (chunk_id, cosine similarity) from pgvector; `tables=False` skips table chunks."""
     # SET LOCAL lasts for the current transaction only. ef_search must be >= k.
     session.execute(text(f"SET LOCAL hnsw.ef_search = {int(max(ef_search, k))}"))
     distance = Chunk.embedding.cosine_distance(query_vec)
-    rows = session.execute(select(Chunk.id, distance.label("d")).order_by(distance).limit(k))
+    query = select(Chunk.id, distance.label("d")).order_by(distance).limit(k)
+    if not tables:
+        # HNSW finds neighbours first and filters after, so a WHERE clause can shrink the
+        # result below k. Iterative scan (pgvector >= 0.8) keeps searching until k pass.
+        session.execute(text("SET LOCAL hnsw.iterative_scan = relaxed_order"))
+        query = query.where(Chunk.kind == "text")
+    rows = session.execute(query)
     return [(r.id, 1.0 - float(r.d)) for r in rows]
 
 
@@ -145,11 +171,13 @@ class Retriever:
         top_k: int | None = None,
         mode: str | None = None,
         rerank: bool | None = None,
+        tables: bool | None = None,
     ) -> RetrievalResult:
-        """Retrieve chunks for `query`. `mode`/`rerank`/`top_k` override settings."""
+        """Retrieve chunks for `query`. `mode`/`rerank`/`tables`/`top_k` override settings."""
         s = self.settings
         mode = mode or s.retrieval_mode
         rerank = s.rerank if rerank is None else rerank
+        tables = s.retrieve_tables if tables is None else tables
         top_k = top_k or s.top_k
         if mode not in ("vector", "bm25", "hybrid"):
             raise ValueError(f"unknown retrieval mode {mode!r}")
@@ -164,11 +192,13 @@ class Retriever:
         if mode in ("vector", "hybrid"):
             t = time.perf_counter()
             vec = self.embedder.embed_query(query).tolist()
-            rankings["vector"] = vector_search(session, vec, s.vector_candidates, s.hnsw_ef_search)
+            rankings["vector"] = vector_search(
+                session, vec, s.vector_candidates, s.hnsw_ef_search, tables
+            )
             timings["vector_ms"] = (time.perf_counter() - t) * 1000
         if mode in ("bm25", "hybrid"):
             t = time.perf_counter()
-            rankings["bm25"] = self._bm25.search(query, s.bm25_candidates)
+            rankings["bm25"] = self._bm25.search(query, s.bm25_candidates, tables)
             timings["bm25_ms"] = (time.perf_counter() - t) * 1000
 
         ranks = {

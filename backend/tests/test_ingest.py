@@ -152,3 +152,31 @@ def test_flags_point_out_suspicious_rows() -> None:
     assert "no units" in plausibility_flags(_row(units=""))
     assert "normative value?" in plausibility_flags(_row(caption="Table 2. Reliability (ICC)"))
     assert "unusual units" in plausibility_flags(_row(metric="symmetry_index", units="m"))
+
+
+JATS_ONE_TABLE = """<?xml version="1.0"?><article><body>
+<table-wrap><label>Table 1</label><caption><title>Cadence reference values by age</title></caption>
+<table><thead><tr><th>Variable</th><th>Young</th></tr></thead>
+<tbody><tr><td>Cadence (steps/min)</td><td>112.04 (8.03)</td></tr></tbody></table>
+</table-wrap></body></article>"""
+
+
+def test_ingest_adds_table_chunks_from_xml(db_session, entry) -> None:
+    doc = pymupdf.open()
+    doc.new_page().insert_text(
+        (72, 72), "Introduction\nCadence is the number of steps per minute walked."
+    )
+    doc.new_page().insert_text(
+        (72, 72), "Table 1. Cadence reference values by age\nCadence 112.04 (8.03)"
+    )
+    doc.save(entry.pdf_path)
+    entry.xml_path.write_text(JATS_ONE_TABLE)
+
+    ingest_paper(db_session, entry, HashingEmbedder(), force=True)
+    db_session.flush()
+    tables = db_session.scalars(select(Chunk).where(Chunk.kind == "table")).all()
+    assert len(tables) == 1
+    t = tables[0]
+    assert (t.page, t.table_no) == (2, "1")
+    assert t.text.startswith("Table 1 Cadence reference values by age\n")
+    assert "Cadence (steps/min) — Young: 112.04 (8.03)" in t.text

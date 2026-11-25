@@ -38,6 +38,7 @@ class SearchRequest(BaseModel):
     top_k: int | None = Field(default=None, ge=1, le=20)
     mode: Mode | None = None
     rerank: bool | None = None
+    tables: bool | None = Field(default=None, description="Include table chunks")
 
     @model_validator(mode="after")
     def _one_input(self) -> SearchRequest:
@@ -53,6 +54,8 @@ class HitOut(BaseModel):
     title: str
     page: int
     section: str | None
+    table_no: str | None = Field(description="Set when the hit is a table chunk")
+    kind: Literal["text", "table"]
     text: str
     score: float
     rerank_score: float | None
@@ -73,6 +76,7 @@ class SearchResponse(BaseModel):
     results: list[QueryResult]
     mode: Mode
     rerank: bool
+    tables: bool
     latency_ms: float
     timings_ms: dict[str, float] = Field(description="Per-stage time, summed over queries")
     disclaimer: str = DISCLAIMER
@@ -96,6 +100,7 @@ def search(
     start = time.perf_counter()
     mode = body.mode or retriever.settings.retrieval_mode
     rerank = retriever.settings.rerank if body.rerank is None else body.rerank
+    tables = retriever.settings.retrieve_tables if body.tables is None else body.tables
     if rerank and retriever.reranker is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Reranking is disabled on this server")
 
@@ -111,7 +116,9 @@ def search(
     results, timings = [], {}
     try:
         for feature, query in queries:
-            r = retriever.retrieve(session, query, top_k=body.top_k, mode=mode, rerank=rerank)
+            r = retriever.retrieve(
+                session, query, top_k=body.top_k, mode=mode, rerank=rerank, tables=tables
+            )
             for stage, ms in r.timings_ms.items():
                 timings[stage] = timings.get(stage, 0.0) + ms
             hits = [
@@ -120,6 +127,8 @@ def search(
                     title=h.chunk.title,
                     page=h.chunk.page,
                     section=h.chunk.section,
+                    table_no=h.chunk.table_no,
+                    kind=h.chunk.kind,
                     text=h.chunk.text,
                     score=h.score,
                     rerank_score=h.rerank_score,
@@ -135,6 +144,7 @@ def search(
         results=results,
         mode=mode,
         rerank=rerank,
+        tables=tables,
         latency_ms=(time.perf_counter() - start) * 1000,
         timings_ms=timings,
     )

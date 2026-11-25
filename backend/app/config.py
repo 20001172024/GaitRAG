@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Retrieval (M3). Each stage can be switched off for the ablation study.
     retrieval_mode: Literal["vector", "bm25", "hybrid"] = "hybrid"
     rerank: bool = True
+    retrieve_tables: bool = True  # include table chunks (caption + rows) in retrieval
     vector_candidates: int = 50  # top-k from pgvector
     bm25_candidates: int = 50  # top-k from BM25
     rrf_k: int = 60  # Reciprocal Rank Fusion constant (Cormack et al., 2009)

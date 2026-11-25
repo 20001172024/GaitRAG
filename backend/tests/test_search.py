@@ -28,7 +28,8 @@ def test_search_by_query_returns_citable_hits(client) -> None:
     body = r.json()
     hit = body["results"][0]["hits"][0]
     assert (hit["paper_id"], hit["page"], hit["title"]) == ("P001", 1, "Gait variability")
-    assert body["mode"] == "hybrid" and body["rerank"] is True
+    assert body["mode"] == "hybrid" and body["rerank"] is True and body["tables"] is True
+    assert hit["kind"] == "text" and hit["table_no"] is None
     assert body["disclaimer"] == DISCLAIMER
     assert len(body["results"][0]["hits"]) <= 3
 
