@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.ask import _llm_or_503, interleave
+from app.api.ask import _llm_or_503
 from app.api.search import get_retriever
 from app.config import Settings
 from app.constants import DISCLAIMER
@@ -11,6 +11,7 @@ from app.db.models import Norm
 from app.db.session import get_session
 from app.main import app
 from app.rag.llm import FakeLLM, LLMError
+from app.rag.pipeline import interleave
 from app.rag.prompts import INSUFFICIENT_MARKER
 from app.rag.reranker import KeywordOverlapReranker
 from app.rag.retriever import ChunkInfo, Hit, Retriever
