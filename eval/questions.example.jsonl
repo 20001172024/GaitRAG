@@ -1,0 +1,8 @@
+{"id": "ex01", "question": "What are typical cadence values for healthy adults in different age groups?", "gold_paper_ids": ["P003", "P006"], "gold_answer": "PLACEHOLDER: to be written by the project owner.", "type": "norm_lookup"}
+{"id": "ex02", "question": "What reference values for stride time have been reported in older adults?", "gold_paper_ids": ["P001", "P002"], "gold_answer": "PLACEHOLDER", "type": "norm_lookup"}
+{"id": "ex03", "question": "How does stride time variability change when walking speed decreases?", "gold_paper_ids": ["P008"], "gold_answer": "PLACEHOLDER", "type": "feature_interpretation"}
+{"id": "ex04", "question": "How many strides are needed to estimate gait variability reliably?", "gold_paper_ids": ["P009"], "gold_answer": "PLACEHOLDER", "type": "method_comparison"}
+{"id": "ex05", "question": "How do instrumented insoles detect heel strike and toe off from plantar pressure?", "gold_paper_ids": ["P013", "P017"], "gold_answer": "PLACEHOLDER", "type": "method_comparison"}
+{"id": "ex06", "question": "Is my left-right gait asymmetry unusual?", "gold_paper_ids": ["P018", "P019", "P020"], "gold_answer": "PLACEHOLDER", "type": "feature_interpretation", "features": {"asymmetry_stance_time_pct": 3.2, "asymmetry_peak_pressure_pct": 11.1}, "prediction": "normal"}
+{"id": "ex07", "question": "What is the recommended dose of ibuprofen for knee pain?", "gold_paper_ids": [], "gold_answer": "", "type": "unanswerable"}
+{"id": "ex08", "question": "Which smartphone brand gives the most accurate step counts?", "gold_paper_ids": [], "gold_answer": "", "type": "unanswerable"}
