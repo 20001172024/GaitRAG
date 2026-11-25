@@ -108,17 +108,19 @@ query ─► vector (pgvector, cosine, top 50) ─┐
      └─► BM25 (rank_bm25, top 50)        ───┴─► RRF (k = 60) ─► cross-encoder rerank (top 30) ─► top 8
 ```
 
+- **What is searched.** 921 prose chunks, plus 595 **table chunks**: each table's caption and its rows written out as "row — header: value", cited as `[P001, p.11, Table 3]`. Normative values live in tables, so without these chunks the reference-value tables could not be retrieved. Wide rows are split so no chunk exceeds the embedding model's 512-token input.
 - **Hybrid search.** Embeddings capture paraphrases, while BM25 catches exact terms such as "CoV" or "PODOSmart". The two rankings are merged with Reciprocal Rank Fusion, which uses ranks only, so there are no score scales to normalize.
-- **Vector search detail.** pgvector's HNSW search examines only `hnsw.ef_search` candidates (default 40), so `LIMIT 50` silently returned 40 rows. The retriever raises it per query, and a test covers this.
-- **Feature queries.** One query per gait feature, including the predicted speed class and leaving out the user's numbers.
-- **Ablations.** Set `RETRIEVAL_MODE=vector|bm25|hybrid` and `RERANK=true|false`, or override per request:
+- **pgvector details.** HNSW search examines only `hnsw.ef_search` candidates (default 40), so `LIMIT 50` silently returned 40 rows. The retriever raises it per query. When table chunks are switched off, the `kind = 'text'` filter is applied after the HNSW search, which returned 41 of 50 rows, so iterative scan is enabled. Both cases are covered by tests.
+- **Reranker.** The default is `cross-encoder/ms-marco-MiniLM-L6-v2`. `BAAI/bge-reranker-base` (in the original stack) was about 7x slower on CPU (30 pairs in ~5.3 s vs ~0.7 s on the 4-core dev sandbox) and stays selectable via `RERANKER_MODEL`. Both are compared in the M6 ablation.
+- **Feature queries.** One short, norm-focused query per gait feature, without the user's numbers. The predicted speed class is *not* in the query text: an early version added "at preferred (self-selected) walking speed", which matched one paper's title and pulled every query to it.
+- **Ablations.** Set `RETRIEVAL_MODE=vector|bm25|hybrid`, `RERANK=true|false` and `RETRIEVE_TABLES=true|false`, or override per request:
 
 ```bash
 curl -X POST localhost:8000/search -H 'Content-Type: application/json' \
-  -d '{"query": "stride time variability at slow speed", "mode": "hybrid", "rerank": true}'
+  -d '{"query": "stride time variability at slow speed", "mode": "hybrid", "rerank": true, "tables": true}'
 ```
 
-Latency, measured on the 4-core development sandbox (CPU only, median per query, 921 chunks): vector 22 ms, BM25 2 ms, hybrid 23 ms, hybrid + `bge-reranker-base` reranking 30 candidates about 6.9 s. These are development measurements; the end-to-end p50/p95 numbers come from `eval/run_latency_eval.py` in M6.
+Latency, measured on the 4-core development sandbox (CPU only, median per query): vector 22 ms, BM25 2 ms, hybrid 23 ms, hybrid + MiniLM rerank about 0.8 s (about 4 s for a recording's 5 feature queries). These are development measurements; the end-to-end p50/p95 numbers come from `eval/run_latency_eval.py` in M6.
 
 ## Data policy
 
