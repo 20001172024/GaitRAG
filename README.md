@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** M4 (generation). The OpenAI call is built and unit-tested but not yet verified against the live API, which needs a key. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
+**Status:** M5 (frontend). The OpenAI call is built and unit-tested but not yet verified against the live API, which needs a key. See [`CLAUDE.md`](CLAUDE.md) for the full brief and milestones.
 
 ## Quick start (Docker)
 
@@ -138,6 +138,17 @@ curl -X POST localhost:8000/ask -H 'Content-Type: application/json' -d '{
 5. **Insufficient-evidence mode.** This applies with no sources, when the model replies `INSUFFICIENT_EVIDENCE`, or after a failed citation check. A threshold on the best reranker score (`MIN_RERANK_SCORE`) is off until it is calibrated on unanswerable questions in M6.
 
 **Providers.** OpenAI and HuggingFace Inference Providers both speak the chat-completions API, so one `httpx` client serves both. Choose one with `LLM_PROVIDER=openai|huggingface` and `LLM_MODEL`, with the key in `OPENAI_API_KEY` or `HF_API_TOKEN`. Without a key, `/ask` returns `503`; `/analyze` and `/search` still work.
+
+## Dashboard (M5)
+
+Open http://localhost:5173 and click **Slow / Normal / Fast walk**. These are synthetic sample recordings served by `GET /samples`. You can also drop your own 40 Hz CSV.
+
+1. **Walking speed:** the prediction with class probabilities and a visible "model trained on synthetic data" badge.
+2. **Sensor signals:** left and right foot load and IMU acceleration (Recharts, drawn at up to 1,000 points).
+3. **Feature cards:** each gait feature with a "vs published norm" verdict (✓ within, ▲ above, ▼ below 1 SD, so it is not shown by colour alone), the z-score, the population and a citation chip. Without approved norms the card says so instead of inventing one.
+4. **What the literature says:** an automatic cited explanation from `/ask`, with clickable citation chips that open the source (title, authors, page, table, licence, supporting passage and a link to the open-access paper), plus a follow-up question box.
+
+Without an LLM key the explanation section says so, and the analysis still works.
 
 ## Data policy
 
