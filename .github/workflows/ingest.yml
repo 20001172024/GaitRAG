@@ -1,0 +1,46 @@
+name: Ingest papers
+
+# Builds (or refreshes) the paper index in the production database:
+# migrations -> download PDFs + XML from the PMC OA dataset -> parse, chunk,
+# embed, extract tables -> load approved norms from data/papers/norms_review.csv.
+# Run it once after the first deploy, and again after approving norms.
+# Needs the DATABASE_URL secret (same database as the deployed app).
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Re-ingest papers even if unchanged
+        type: boolean
+        default: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check configuration
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Set the DATABASE_URL repository secret first."
+            exit 1
+          fi
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -e backend
+      - name: Migrate database
+        working-directory: backend
+        run: alembic upgrade head
+      - name: Download papers
+        run: python scripts/download_papers.py
+      - name: Ingest
+        run: python scripts/ingest_papers.py ${{ inputs.force && '--force' || '' }}

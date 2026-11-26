@@ -1,0 +1,56 @@
+name: Deploy
+
+# Deploys to a Hugging Face Space after CI passes on main (or when run by hand).
+# Needs repository settings (Settings -> Secrets and variables -> Actions):
+#   secrets:   HF_TOKEN (write), DATABASE_URL (Postgres with pgvector),
+#              OPENAI_API_KEY (optional), HF_API_TOKEN (optional)
+#   variables: HF_SPACE (e.g. your-hf-user/gaitrag)
+# Without them the job prints a notice and stops without failing.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      HF_API_TOKEN: ${{ secrets.HF_API_TOKEN }}
+      HF_SPACE: ${{ vars.HF_SPACE }}
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+      LLM_MODEL: ${{ vars.LLM_MODEL }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$DATABASE_URL" ] || [ -z "$HF_SPACE" ]; then
+            echo "::notice::Deploy skipped: set secrets HF_TOKEN and DATABASE_URL and variable HF_SPACE."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.ready == 'true'
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-python@v7
+        if: steps.config.outputs.ready == 'true'
+        with:
+          python-version: "3.11"
+      - name: Deploy to Hugging Face Space
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          pip install "huggingface_hub>=0.25"
+          python scripts/deploy_space.py --space "$HF_SPACE" \
+            --source-url "https://github.com/${{ github.repository }}"

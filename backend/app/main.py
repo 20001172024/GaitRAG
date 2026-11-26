@@ -2,9 +2,10 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import analyze, health
+from app.api import analyze, ask, health, papers, samples, search
 from app.config import get_settings
 from app.constants import DISCLAIMER
 
@@ -25,6 +26,13 @@ def create_app() -> FastAPI:
     )
     app.include_router(health.router)
     app.include_router(analyze.router)
+    app.include_router(papers.router)
+    app.include_router(search.router)
+    app.include_router(ask.router)
+    app.include_router(samples.router)
+    if settings.frontend_dist is not None:
+        # Mounted last so API routes take precedence; html=True serves index.html at "/".
+        app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="frontend")
     return app
 
 

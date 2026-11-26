@@ -6,7 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# CPU-only PyTorch first: the default PyPI wheel bundles CUDA (several GB).
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+
 COPY pyproject.toml ./
+COPY alembic.ini ./
 COPY app ./app
 COPY models ./models
 RUN pip install --no-cache-dir -e ".[dev]"

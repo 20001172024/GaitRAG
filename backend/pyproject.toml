@@ -19,12 +19,21 @@ dependencies = [
     # Pinned exactly: the saved model (joblib/pickle) must be loaded with the
     # same scikit-learn version that trained it.
     "scikit-learn==1.9.1",
+    # RAG / ingestion
+    "httpx>=0.27",
+    "pymupdf>=1.24",
+    "sqlalchemy>=2.0,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "pgvector>=0.3",
+    "alembic>=1.13",
+    # Install CPU-only torch first (see Dockerfile / CI), or pip pulls the CUDA build.
+    "sentence-transformers>=3.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "httpx>=0.27",
     "ruff>=0.6",
     "black>=24.0",
     "pre-commit>=3.7",
