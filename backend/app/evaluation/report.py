@@ -9,9 +9,9 @@ from pathlib import Path
 RESULTS_DIR = Path(__file__).resolve().parents[3] / "eval" / "results"
 
 PLACEHOLDER_BANNER = (
-    "> **PLACEHOLDER QUESTIONS.** These numbers come from `eval/questions.example.jsonl`, "
-    "a handful of example questions used only to test the scripts. They are **not** "
-    "results and must not be reported.\n"
+    "> **NOT REPORTABLE.** These numbers come from a placeholder or draft question file "
+    "(not the owner-reviewed `eval/questions.jsonl`). They are **not** results and must "
+    "not be reported.\n"
 )
 
 

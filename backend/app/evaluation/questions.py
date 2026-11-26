@@ -37,8 +37,12 @@ class EvalQuestion:
 
 
 def is_placeholder(path: Path) -> bool:
-    """Example/placeholder files must never produce reportable results."""
-    return "example" in path.name or "placeholder" in path.name
+    """Example, placeholder and draft files must never produce reportable results.
+
+    "draft" covers AI-drafted question sets: they become reportable only after the
+    owner reviews them and saves them as questions.jsonl.
+    """
+    return any(word in path.name for word in ("example", "placeholder", "draft"))
 
 
 def load_questions(path: Path, known_papers: set[str] | None = None) -> list[EvalQuestion]:

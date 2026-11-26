@@ -84,6 +84,7 @@ def test_duplicate_ids_are_rejected(tmp_path: Path) -> None:
 
 def test_placeholder_files_are_detected() -> None:
     assert is_placeholder(Path("eval/questions.example.jsonl"))
+    assert is_placeholder(Path("eval/questions.draft.jsonl"))
     assert not is_placeholder(Path("eval/questions.jsonl"))
 
 
@@ -99,4 +100,5 @@ def test_placeholder_reports_are_prefixed_and_bannered(tmp_path: Path) -> None:
     )
     assert md.name == "PLACEHOLDER_retrieval.md" and csv_path.name == "PLACEHOLDER_retrieval.csv"
     text = md.read_text()
-    assert "must not be reported" in text and "| hybrid | 0.500 |" in text
+    assert "NOT REPORTABLE" in text and "must not be reported" in " ".join(text.split())
+    assert "| hybrid | 0.500 |" in text
