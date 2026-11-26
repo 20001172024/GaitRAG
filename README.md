@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** all milestones are implemented (see [`CLAUDE.md`](CLAUDE.md)). Still pending before the project is "done": evaluation results (they need the owner's question set and an LLM API key), human approval of the extracted norm values, a live deployment, and a demo GIF.
+**Status:** all milestones are implemented (see [`CLAUDE.md`](CLAUDE.md)). Still pending before the project is "done": evaluation results (they need the owner's question set and an LLM API key), human approval of the extracted norm values, the live deployment (the automation is ready; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)), and a demo GIF.
 
 ## Architecture
 
@@ -62,6 +62,8 @@ docker compose up --build       # API :8000, UI :5173, Postgres :5432
 | `GET /papers` | the corpus, with attribution and licence |
 | `GET /samples` | synthetic demo recordings |
 | `GET /health` | liveness and database status |
+
+**Deploy:** Hugging Face Spaces (app) + Neon (Postgres with pgvector), deployed by GitHub Actions after CI passes on `main`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). `/ask` is rate-limited, because it spends the owner's API credit.
 
 ## Results
 
