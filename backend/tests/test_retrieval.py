@@ -167,7 +167,10 @@ def test_filtered_vector_search_still_returns_k_rows(db_session) -> None:
     embedder = HashingEmbedder()
     db_session.add(Paper(paper_id="P001", title="t", licence="CC-BY", source_url="u", pdf_url="u"))
     db_session.flush()
-    for i in range(80):
+    # 60 table rows crowd the query; 40 text rows are eligible for k = 20. The test checks
+    # that filtering still fills k (iterative scan), not that approximate HNSW search has
+    # perfect recall: with exactly k eligible rows a single HNSW miss returned k - 1.
+    for i in range(100):
         kind = "table" if i < 60 else "text"
         body = f"cadence table row {i}" if kind == "table" else f"walking prose {i} cadence"
         db_session.add(
