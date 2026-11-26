@@ -71,6 +71,8 @@ _BOUNDS: dict[tuple[str, str], tuple[float, float]] = {
     ("gait_speed", "cm/s"): (10, 300),
     ("gait_speed", "km/h"): (0.4, 11),
     ("symmetry_index", "%"): (0, 50),
+    ("symmetry_index_stance_time", "%"): (0, 50),
+    ("symmetry_index_peak_pressure", "%"): (0, 50),
 }
 _NON_NORMATIVE = re.compile(
     r"reliab|regress|correlat|\bicc\b|agreement|validat|session|retest|repeatab|accuracy",
@@ -115,6 +117,8 @@ def plausibility_flags(row: dict[str, str]) -> str:
                 break
     if values["mean"] is not None and values["sd"] is not None and values["sd"] > values["mean"]:
         flags.append("sd > mean")
+    if metric == "symmetry_index":
+        flags.append("generic symmetry index: set metric to the specific quantity to use it")
     if not row.get("population", "").strip():
         flags.append("no population")
     context = " ".join(row.get(k, "") for k in ("caption", "column_header", "row_label"))

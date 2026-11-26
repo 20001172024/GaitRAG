@@ -30,8 +30,11 @@ FEATURE_METRICS: dict[str, tuple[str, str]] = {
     "stance_pct_right": ("stance_pct", "%"),
     "swing_pct_left": ("swing_pct", "%"),
     "swing_pct_right": ("swing_pct", "%"),
-    "asymmetry_stance_time_pct": ("symmetry_index", "%"),
-    "asymmetry_peak_pressure_pct": ("symmetry_index", "%"),
+    # Symmetry indices are only comparable for the same quantity: a published step-length
+    # SI must not be compared with our peak-pressure SI. The extractor proposes a generic
+    # "symmetry_index"; the reviewer sets the specific metric when approving a row.
+    "asymmetry_stance_time_pct": ("symmetry_index_stance_time", "%"),
+    "asymmetry_peak_pressure_pct": ("symmetry_index_peak_pressure", "%"),
 }
 
 

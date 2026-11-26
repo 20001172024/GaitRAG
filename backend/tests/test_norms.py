@@ -85,3 +85,13 @@ def test_compare_features_uses_approved_norms_only(db_session) -> None:
         ("cadence_steps_per_min", "20–29 | M"),
         ("cadence_steps_per_min", "20–29 | W"),
     ]
+
+
+def test_symmetry_norms_only_compare_like_with_like() -> None:
+    stance = _norm(
+        metric="symmetry_index_stance_time", value_text="0.7 ± 0.1", mean=0.7, sd=0.1, units="%"
+    )
+    assert compare("asymmetry_stance_time_pct", 3.2, stance) is not None
+    assert compare("asymmetry_peak_pressure_pct", 11.1, stance) is None
+    generic = _norm(metric="symmetry_index", value_text="0.4 ± 0.1", mean=0.4, sd=0.1, units="%")
+    assert compare("asymmetry_stance_time_pct", 3.2, generic) is None
