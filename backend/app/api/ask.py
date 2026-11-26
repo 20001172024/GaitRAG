@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.api.ratelimit import limit_ask
 from app.api.schemas import NormComparisonOut
 from app.api.search import Mode, get_retriever
 from app.config import get_settings
@@ -79,6 +80,7 @@ def ask(
     # The LLM is resolved first: with no API key the request fails fast with 503,
     # before the retriever (which loads the embedding models) is built.
     llm: Annotated[LLMClient, Depends(_llm_or_503)],
+    _: Annotated[None, Depends(limit_ask)],
     session: Annotated[Session, Depends(get_session)],
     retriever: Annotated[Retriever, Depends(get_retriever)],
 ) -> AskResponse:

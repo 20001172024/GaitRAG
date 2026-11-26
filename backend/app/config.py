@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0  # deterministic answers, reproducible eval
     llm_max_tokens: int = 700
     llm_timeout_s: float = 60.0
+    # Public-demo protection for /ask (0 = unlimited). Counters are per process.
+    ask_limit_per_client_per_hour: int = 20
+    ask_limit_per_day: int = 300
     max_context_chunks: int = 8  # retrieved passages given to the LLM
     # Skip the LLM and answer "insufficient evidence" when the best reranker score is
     # below this. None = gate off: the value must be calibrated on unanswerable
