@@ -38,7 +38,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     HF_HUB_OFFLINE=1 \
     FRONTEND_DIST=/app/frontend/dist \
     APP_ENV=production
-RUN useradd --create-home --uid 10001 gaitrag
+# Hugging Face Spaces runs containers as uid 1000; match it so writable paths work.
+RUN useradd --create-home --uid 1000 gaitrag
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /opt/hf /opt/hf
 WORKDIR /app
