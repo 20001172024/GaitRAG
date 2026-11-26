@@ -4,7 +4,7 @@ Evidence-grounded gait analysis assistant. Upload a walking recording (insole IM
 
 > **Disclaimer:** GaitRAG is a research and education tool. It is not a medical device and does not provide diagnosis or clinical advice. Results are based on a model and published literature and may be incomplete or wrong.
 
-**Status:** all milestones are implemented (see [`CLAUDE.md`](CLAUDE.md)). Still pending before the project is "done": evaluation results (they need the owner's question set and an LLM API key), human approval of the extracted norm values, the live deployment (the automation is ready; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)), and a demo GIF.
+**Status:** all milestones are implemented (see [`CLAUDE.md`](CLAUDE.md)), and retrieval and latency results are in. Still pending: generation metrics and live explanations (they need an LLM API key) and the live deployment (the automation is ready; see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 
 ## Architecture
 
@@ -67,15 +67,31 @@ docker compose up --build       # API :8000, UI :5173, Postgres :5432
 
 ## Results
 
-**Pending.** The evaluation scripts are built (see [Evaluation](#evaluation-m6)), but no results are reported until they come from real runs on the owner's question set. The only metrics so far are the speed classifier's, on **synthetic** data ([report](backend/models/training_report.md)), which show that the pipeline runs and nothing about real-world accuracy.
+![GaitRAG demo: a synthetic sample recording, its features compared with approved published norms, and the cited source panel](docs/demo.gif)
 
-| Ablation | Recall@5 | Recall@10 | MRR |
-|---|---|---|---|
-| 1. Vector only | – | – | – |
-| 2. BM25 only | – | – | – |
-| 3. Hybrid (RRF) | – | – | – |
-| 4. Hybrid + reranker | – | – | – |
-| 5. Hybrid + reranker + tables / norms lookup | – | – | – |
+**Retrieval** ([full report](eval/results/retrieval_ablation_ms-marco-MiniLM-L6-v2.md); 50 questions: 40 answerable, 10 unanswerable; top-10 chunks; CPU):
+
+| Ablation | Recall@5 | Recall@10 | MRR | Median latency |
+|---|---|---|---|---|
+| 1. Vector only (bge-small + pgvector) | 0.804 | 0.825 | 0.749 | 24 ms |
+| 2. BM25 only | 0.821 | 0.883 | 0.749 | 2 ms |
+| 3. Hybrid (RRF) | 0.829 | 0.900 | 0.749 | 25 ms |
+| 4. Hybrid + reranker (MiniLM) | 0.817 | 0.854 | 0.776 | 861 ms |
+| 5. Hybrid + reranker + table chunks | **0.904** | **0.917** | **0.857** | 871 ms |
+
+- **Table chunks matter most.** Normative values live in tables, and indexing them raised Recall@5 from 0.82 to 0.90.
+- **Reranker choice.** With `bge-reranker-base` ([report](eval/results/retrieval_ablation_bge-reranker-base.md)), config 4 improves (Recall@5 0.863), but config 5 is no better (0.896, MRR 0.838) and each query takes 6.7 s instead of 0.87 s. MiniLM therefore stays the default.
+- **The MiniLM reranker alone** raised MRR but slightly lowered Recall@5 (0.829 → 0.817).
+- **Insufficient-evidence gate:** a threshold of `MIN_RERANK_SCORE = 1.76` (config 5) would catch all 10 unanswerable questions, with abstention precision 0.83. It was fitted on this same small set, so it is not enabled by default.
+
+**Latency** ([report](eval/results/latency.md), 4-core CPU, warm): `/analyze` p50 104 ms / p95 123 ms; `/search` p50 954 ms / p95 1225 ms.
+
+**Speed classifier:** evaluated on **synthetic** data only ([report](backend/models/training_report.md)). This shows that the pipeline runs and says nothing about real-world accuracy.
+
+**Caveats.**
+- The question set was drafted by the AI assistant from the papers' text and approved by the owner, not written independently, so retrieval results may be optimistic.
+- Norm values were proposed by the AI assistant and approved by the owner.
+- **Pending:** generation metrics (abstention, citation accuracy, RAGAS, OpenAI vs HuggingFace) need an LLM API key, so they have not been run.
 
 ## Local development
 
@@ -205,7 +221,7 @@ python eval/run_generation_eval.py       # abstention P/R, citations, latency (n
 python eval/run_latency_eval.py          # p50/p95 of /analyze, /search, /ask (running API)
 ```
 
-**Results:** not available yet. No numbers are reported until they come from real runs on the owner's questions. A placeholder file (`eval/questions.example.jsonl`) exists only to test the scripts, and runs on it are labelled `PLACEHOLDER` and git-ignored.
+**Results:** see [Results](#results). Retrieval and latency come from real runs on `eval/questions.jsonl` (see [its provenance](eval/README.md)); generation metrics are pending an LLM key. The placeholder file (`eval/questions.example.jsonl`) exists only to test the scripts, and runs on it are labelled `PLACEHOLDER` and git-ignored.
 
 - **Retrieval ablations:** (1) vector, (2) BM25, (3) hybrid RRF, (4) + reranker, (5) + table chunks. Running with `--reranker BAAI/bge-reranker-base` compares the two rerankers.
 - **Generation:** the same pipeline as `/ask`. Use `--no-norms` for the norms-lookup ablation, and set `LLM_PROVIDER` to compare OpenAI with HuggingFace.

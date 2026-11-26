@@ -30,8 +30,27 @@ def override_settings():
     app.dependency_overrides.clear()
 
 
+class _UnavailableSession:
+    """Stands in for a database that cannot be reached."""
+
+    def scalars(self, *args, **kwargs):
+        from sqlalchemy.exc import OperationalError
+
+        raise OperationalError("SELECT", {}, Exception("database unavailable"))
+
+
+@pytest.fixture
+def no_database():
+    """Isolate tests from whatever database the environment points at."""
+    from app.db.session import get_session
+
+    app.dependency_overrides[get_session] = lambda: _UnavailableSession()
+    yield
+    app.dependency_overrides.pop(get_session, None)
+
+
 @pytest.mark.parametrize("speed", ["slow", "normal", "fast"])
-def test_sample_recordings_are_analyzed(speed: str) -> None:
+def test_sample_recordings_are_analyzed_without_a_database(speed: str, no_database) -> None:
     response = _post_csv((SAMPLES / f"synthetic_{speed}.csv").read_bytes())
     assert response.status_code == 200
     body = response.json()
