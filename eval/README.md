@@ -11,7 +11,7 @@
 - `gold_paper_ids` must be paper IDs from `data/papers/manifest.csv`, and must be empty for `unanswerable` questions.
 - `features` and `prediction` are optional and simulate a question asked about a recording.
 
-`questions.draft.jsonl` is a **50-question draft written by the AI assistant** from the papers' own text (gold papers were not chosen from retrieval output). To use it, review every question and gold paper, fill in the `gold_answer` fields marked `TODO (owner)`, then save it as `questions.jsonl`. Until then, runs on it are marked **NOT REPORTABLE**.
+**Provenance of `questions.jsonl`:** the 50 questions were drafted by the AI assistant (Claude) from the papers' own text, at the owner's request. Gold papers were chosen from the text, not from retrieval output, and gold answers quote figures stated in the papers. The set becomes official when the owner approves it by merging the pull request that adds it. Because the system's builder wrote the questions, results on this set may be optimistic; an independently written set would be a stronger test.
 
 `questions.example.jsonl` holds 8 **placeholder** questions used only to test the scripts. Any run on it writes `results/PLACEHOLDER_*` files, which are git-ignored and carry a warning banner. They are never results.
 
