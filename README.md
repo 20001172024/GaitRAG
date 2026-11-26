@@ -142,6 +142,8 @@ python scripts/ingest_papers.py     # parse, chunk, embed -> Postgres; refresh n
 
 Set `decision` to `approve` or `reject` in the review CSV (you may correct metric, population, units or the parsed numbers), then re-run `ingest_papers.py`. Unchanged PDFs are skipped. Your edits are kept for every row that has a decision or a note; untouched rows are refreshed from extraction.
 
+**AI-suggested decisions** for the clearly normative tables (P001 T3, P003 T4, P004 T2, P006 T2, P009 T2, P020 T1) are in [`data/papers/norms_review_suggestions.csv`](data/papers/norms_review_suggestions.csv), each with the reason checked against the paper. They are suggestions only: nothing is approved until the owner sets `decision` in `norms_review.csv`.
+
 The `flags` column gives automatic hints: no or unusual units, a value outside rough plausibility bounds, SD larger than the mean, a missing population, or a reliability, regression or validation table. **The bounds are sanity limits chosen for this project, not published norms.** A flag is not a decision; it only shows where to look first.
 
 ## Retrieval (M3)
